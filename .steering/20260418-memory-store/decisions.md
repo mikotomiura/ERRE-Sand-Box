@@ -43,6 +43,22 @@
 - **トレードオフ**: 2 テーブルが空のまま M4 まで残る。データベースサイズは無視できる (~0 MB)。
 - **反映先**: `store.py` で 4 テーブルすべてを `create_schema()` に含める、`__init__.py` の re-export は全 kind 共通 API、テストは Episodic/Semantic を厚めに、Procedural/Relational は 1 ケースずつ round-trip のみ
 
+## D5. 埋め込みはプレフィックス付与を強制 (QUERY / DOC 区別)
+
+- **日付**: 2026-04-18 (T09 nomic-embed-text pull 完了後のアメンド)
+- **判断**: `EmbeddingClient` は `embed_query(text)` と `embed_document(text)` を第一級 API として公開し、それぞれ `"search_query: "` と `"search_document: "` プレフィックスを自動付与する。低レベル `embed(text)` は明示利用のみ (Retriever からは呼ばない)。
+- **背景**: nomic-embed-text-v1.5 は Contrastive Learning で訓練されており、検索用クエリと保存用ドキュメントは異なるプレフィックスを付与することで学習時分布に合わせる設計になっている。プレフィックスミスマッチは recall で 5-15 ポイント劣化することが CSDG 実装でも観測されている (test-standards Skill §ルール 6 の警告と整合)。
+- **採用理由**:
+  1. test-standards Skill §ルール 6 で `tests/test_memory/test_embedding_prefix.py` が **CI 必須、削除禁止** と明記されている
+  2. 呼び出し側 (`Retriever.retrieve()` がクエリ、`MemoryStore.add()` 経由でドキュメント) の意図が型レベルで分離できる
+  3. 将来 multilingual-e5 や bge-m3 等に切替える際も、プレフィックス定数を 1 行書き換えるだけで済む
+- **プレフィックス仕様**:
+  - `QUERY_PREFIX = "search_query: "` (nomic-embed-text-v1.5 規約)
+  - `DOC_PREFIX   = "search_document: "`
+  - 将来モデル切替時: multilingual-e5 → `"query: "` / `"passage: "`、bge-m3 → プレフィックス不要 (空文字列)
+- **トレードオフ**: `embed()` 低レベル API も残すため API 面積が 3 メソッドに増える。明確に「高レベル優先、低レベルは明示利用」のドキュメントで混乱を防ぐ。
+- **反映先**: `design.md §3.2 / §7`, `tasklist.md` embedding.py 実装節、`test_embedding_prefix.py` の新規追加
+
 ## D4. 本セッションのスコープは設計確定まで (実装は次セッション)
 
 - **日付**: 2026-04-18

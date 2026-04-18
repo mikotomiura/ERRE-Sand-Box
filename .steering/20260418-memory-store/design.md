@@ -115,14 +115,29 @@ class MemoryStore:
 ### 3.2 `src/erre_sandbox/memory/embedding.py`
 
 ```python
+# 検索用と保存用で異なるプレフィックスを付与する (nomic-embed-text-v1.5 規約)。
+# test-standards Skill §ルール 6 により、QUERY_PREFIX != DOC_PREFIX 検証は CI 必須。
+QUERY_PREFIX: Final[str] = "search_query: "
+DOC_PREFIX: Final[str]   = "search_document: "
+
+
 class EmbeddingClient:
     DEFAULT_MODEL: ClassVar[str] = "nomic-embed-text"
     DEFAULT_DIM: ClassVar[int] = 768
     DEFAULT_ENDPOINT: ClassVar[str] = "http://127.0.0.1:11434"
 
     def __init__(self, model: str | None = None, endpoint: str | None = None) -> None: ...
+
+    # 低レベル: プレフィックス無しで embed (明示利用のみ)
     async def embed(self, text: str) -> list[float]: ...
-    async def embed_many(self, texts: list[str]) -> list[list[float]]: ...
+
+    # 高レベル: ユースケース別にプレフィックス付与 (Retriever から呼ぶ既定 API)
+    async def embed_query(self, text: str) -> list[float]: ...     # QUERY_PREFIX 付与
+    async def embed_document(self, text: str) -> list[float]: ...  # DOC_PREFIX 付与
+
+    async def embed_many(
+        self, texts: list[str], *, kind: Literal["query", "document"],
+    ) -> list[list[float]]: ...
     async def close(self) -> None: ...
 
 
@@ -184,12 +199,13 @@ __all__ = [
 ### 4.1 新規作成するファイル
 
 - `src/erre_sandbox/memory/store.py` — 本タスクのコア (推定 300-400 行)
-- `src/erre_sandbox/memory/embedding.py` — Ollama アダプタ (推定 80-120 行)
+- `src/erre_sandbox/memory/embedding.py` — Ollama アダプタ + QUERY/DOC プレフィックス (推定 120-160 行)
 - `src/erre_sandbox/memory/retrieval.py` — 2 層検索 + decay (推定 150-200 行)
 - `tests/test_memory/__init__.py` (空)
 - `tests/test_memory/conftest.py` — `in_memory_store` fixture, `fake_embedding` fixture
 - `tests/test_memory/test_store.py` — round-trip, 4 kind 分離, vec0 KNN
-- `tests/test_memory/test_embedding.py` — mock httpx で 768 次元検証
+- `tests/test_memory/test_embedding.py` — mock httpx で 768 次元 + プレフィックス送信検証
+- `tests/test_memory/test_embedding_prefix.py` — プレフィックス一致テスト (test-standards §ルール 6 で CI 必須、削除禁止)
 - `tests/test_memory/test_retrieval.py` — 減衰ランキング順、スコープ分離、recall_count 副作用
 
 ### 4.2 修正するファイル
@@ -227,6 +243,12 @@ __all__ = [
 - **test_embedding.py** (単体 + mock):
   - `test_embed_returns_expected_dim`: httpx mock で 768 次元 float 列を返す
   - `test_embed_unreachable_raises`: Ollama ダウン時に `EmbeddingUnavailableError`
+  - `test_embed_query_prepends_prefix`: `embed_query(text)` の送信 payload が `QUERY_PREFIX + text` 化
+  - `test_embed_document_prepends_prefix`: `embed_document(text)` の送信 payload が `DOC_PREFIX + text` 化
+- **test_embedding_prefix.py** (統合、test-standards §ルール 6 必須):
+  - `test_query_and_doc_prefix_are_different`: `QUERY_PREFIX != DOC_PREFIX` を assert
+  - `test_semantic_similarity_with_correct_prefix`: 関連 doc と無関連 doc の cosine_sim 差 ≥ 0.3
+  - **このテストは削除・無効化禁止** (プレフィックスミスマッチは recall 5-15 ポイント劣化の典型)
 - **test_retrieval.py** (統合):
   - `test_retrieve_decay_ranking`: 古い高 importance と 新しい低 importance の順序検証
   - `test_retrieve_agent_vs_world_split`: per-agent 8 + world 3 の件数分離

@@ -22,9 +22,12 @@
 - [ ] `close()`: connection 終了
 
 ### embedding.py
+- [ ] `QUERY_PREFIX` / `DOC_PREFIX` 定数 (`"search_query: "` / `"search_document: "`, nomic-embed-text-v1.5 規約)
 - [ ] `EmbeddingClient.__init__`: httpx.AsyncClient、endpoint / model デフォルト
-- [ ] `embed(text)`: POST `/api/embed`、`{"model":..., "input":text}` → response の `embeddings[0]` を返す
-- [ ] `embed_many(texts)`: 入力が list の場合の一括 embed (Ollama は list input 対応)
+- [ ] `embed(text)`: 低レベル POST `/api/embed`、プレフィックス無し
+- [ ] `embed_query(text)`: `QUERY_PREFIX + text` を embed (Retriever が使う)
+- [ ] `embed_document(text)`: `DOC_PREFIX + text` を embed (add 時に store 層から呼ばれる)
+- [ ] `embed_many(texts, kind)`: 一括 embed、`kind="query"|"document"` で切替
 - [ ] `EmbeddingUnavailableError` と httpx 例外の wrap
 - [ ] `close()`: client.aclose()
 
@@ -47,7 +50,8 @@
 - [ ] `tests/test_memory/__init__.py` 空ファイル作成
 - [ ] `tests/test_memory/conftest.py`: `in_memory_store`, `fake_embedding_client` fixture
 - [ ] test_store.py 5 ケース実装
-- [ ] test_embedding.py 2 ケース実装 (httpx mock)
+- [ ] test_embedding.py 4 ケース実装 (httpx mock: dim / 例外 / QUERY プレフィックス送信 / DOC プレフィックス送信)
+- [ ] test_embedding_prefix.py 2 ケース実装 (プレフィックス差異、関連/無関連 cosine 差 ≥ 0.3) — **CI 必須、削除禁止**
 - [ ] test_retrieval.py 3 ケース実装
 - [ ] `uv run pytest tests/test_memory/` でローカル緑
 - [ ] `uv run pytest` 全体で 96 + 10 前後 = ~106 passed を確認
