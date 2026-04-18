@@ -50,17 +50,20 @@
 ## 偉人追加テンプレート
 
 ```yaml
-# personas/[name].yaml
-name: "[フルネーム]"
+# personas/[name].yaml — schemas.PersonaSpec 準拠
+schema_version: "0.1.0-m2"
+persona_id: "[kebab-case id, e.g. kant]"
+display_name: "[フルネーム]"
 era: "[生年-没年]"
 primary_corpus_refs:
   - "[引用キー (author+year)]"
 cognitive_habits:
   - description: "[観察可能な行動記述]"
     source: "[引用キー]"
-    flag: fact          # fact | legend | speculative
+    flag: fact            # fact | legend | speculative
     mechanism: "[認知神経科学的機序]"
-personality_traits:
+    trigger_zone: study   # 5 zones から選択 or null (persona-global habit)
+personality:              # PersonaSpec.personality (= PersonalityTraits)
   # Big Five (0.0-1.0)
   openness: 0.0
   conscientiousness: 0.0
@@ -68,12 +71,19 @@ personality_traits:
   agreeableness: 0.0
   neuroticism: 0.0
   # ERRE 固有特性
-  wabi: 0.0             # 不完全性への受容度
-  ma_sense: 0.0         # 沈黙への耐性
-  shuhari_stage: "shu"  # shu | ha | ri
+  wabi: 0.0               # 不完全性への受容度
+  ma_sense: 0.0           # 沈黙への耐性
 preferred_zones:
-  - study               # 5 ゾーンから選択
+  - study                 # 5 ゾーンから選択
+default_sampling:
+  temperature: 0.70       # base — persona 指紋で調整
+  top_p: 0.90
+  repeat_penalty: 1.00
 ```
+
+**注意**: `shuhari_stage` は動的な認知状態 (`AgentState.cognitive.shuhari_stage`)
+であり、静的ペルソナ定義 (`PersonaSpec.personality`) には含まれない。
+T05 schemas-freeze の分離判断に従うこと。
 
 ---
 
