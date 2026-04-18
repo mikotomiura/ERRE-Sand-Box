@@ -31,7 +31,7 @@
 - [ ] T14 `gateway-fastapi-ws` (G-GEAR, 1d)
 
 #### MacBook 側
-- [ ] T15 `godot-project-init` (MacBook, 0.5d)
+- [x] T15 `godot-project-init` (MacBook, 0.5d)
 - [ ] T16 `godot-ws-client` (MacBook, 1d)
 - [ ] T17 `godot-peripatos-scene` (MacBook, 1d)
 - [ ] T18 `ui-dashboard-minimal` (MacBook, 0.5d) — optional
