@@ -14,3 +14,17 @@ package distributions for details.
 
 When running the optional `ui` extras, the product additionally loads
 Streamlit, which retains its Apache-2.0 license.
+
+--- Prior-work references (design-only, no bundled code) ---
+
+This project's data contract (notably the Physical, Cognitive, and
+PerceptionEvent schemas in src/erre_sandbox/schemas.py) was informed by
+the design of CSDG (Cognitive State Diary Generator) by mikotomiura,
+MIT-licensed at
+https://github.com/mikotomiura/cognitive-state-diary-generator.
+The shape of HumanCondition, CharacterState, and DailyEvent in CSDG
+inspired our Physical, Cognitive, and PerceptionEvent schemas; no code
+is reused verbatim. Specific pattern adoptions are documented in the
+repository file `.steering/20260418-schemas-freeze/decisions.md` (this
+steering log is kept in the repository and is not bundled with released
+wheels / sdists).

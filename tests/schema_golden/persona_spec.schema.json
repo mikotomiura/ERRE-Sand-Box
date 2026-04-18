@@ -1,0 +1,219 @@
+{
+  "$defs": {
+    "CognitiveHabit": {
+      "additionalProperties": false,
+      "description": "One recurring cognitive-behavioural pattern of a historical figure.",
+      "properties": {
+        "description": {
+          "description": "Concrete habit, present tense.",
+          "title": "Description",
+          "type": "string"
+        },
+        "flag": {
+          "$ref": "#/$defs/HabitFlag",
+          "description": "fact / legend / speculative."
+        },
+        "mechanism": {
+          "description": "Cognitive-neuroscience mechanism hypothesised to underlie it.",
+          "title": "Mechanism",
+          "type": "string"
+        },
+        "source": {
+          "description": "Citation key, e.g. 'kuehn2001'.",
+          "title": "Source",
+          "type": "string"
+        },
+        "trigger_zone": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Zone"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Zone that typically activates this habit, if any."
+        }
+      },
+      "required": [
+        "description",
+        "source",
+        "flag",
+        "mechanism"
+      ],
+      "title": "CognitiveHabit",
+      "type": "object"
+    },
+    "HabitFlag": {
+      "description": "Epistemic status of a cognitive habit attributed to a historical figure.",
+      "enum": [
+        "fact",
+        "legend",
+        "speculative"
+      ],
+      "title": "HabitFlag",
+      "type": "string"
+    },
+    "PersonalityTraits": {
+      "additionalProperties": false,
+      "description": "Static personality: Big Five + ERRE-specific Japanese aesthetic traits.",
+      "properties": {
+        "agreeableness": {
+          "default": 0.5,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Agreeableness",
+          "type": "number"
+        },
+        "conscientiousness": {
+          "default": 0.5,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Conscientiousness",
+          "type": "number"
+        },
+        "extraversion": {
+          "default": 0.5,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Extraversion",
+          "type": "number"
+        },
+        "ma_sense": {
+          "default": 0.5,
+          "description": "Tolerance of silence.",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Ma Sense",
+          "type": "number"
+        },
+        "neuroticism": {
+          "default": 0.5,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Neuroticism",
+          "type": "number"
+        },
+        "openness": {
+          "default": 0.5,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Openness",
+          "type": "number"
+        },
+        "wabi": {
+          "default": 0.5,
+          "description": "Acceptance of imperfection.",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Wabi",
+          "type": "number"
+        }
+      },
+      "title": "PersonalityTraits",
+      "type": "object"
+    },
+    "SamplingBase": {
+      "additionalProperties": false,
+      "description": "Absolute sampling parameters used as the persona's baseline.",
+      "properties": {
+        "repeat_penalty": {
+          "default": 1.0,
+          "maximum": 2.0,
+          "minimum": 0.5,
+          "title": "Repeat Penalty",
+          "type": "number"
+        },
+        "temperature": {
+          "default": 0.7,
+          "maximum": 2.0,
+          "minimum": 0.0,
+          "title": "Temperature",
+          "type": "number"
+        },
+        "top_p": {
+          "default": 0.9,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Top P",
+          "type": "number"
+        }
+      },
+      "title": "SamplingBase",
+      "type": "object"
+    },
+    "Zone": {
+      "description": "Five spatial zones of the world (see ``docs/glossary.md``).",
+      "enum": [
+        "study",
+        "peripatos",
+        "chashitsu",
+        "agora",
+        "garden"
+      ],
+      "title": "Zone",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Root schema for a persona YAML (one file per historical figure).",
+  "properties": {
+    "cognitive_habits": {
+      "items": {
+        "$ref": "#/$defs/CognitiveHabit"
+      },
+      "title": "Cognitive Habits",
+      "type": "array"
+    },
+    "default_sampling": {
+      "$ref": "#/$defs/SamplingBase"
+    },
+    "display_name": {
+      "title": "Display Name",
+      "type": "string"
+    },
+    "era": {
+      "description": "Dates, e.g. '1724-1804'.",
+      "title": "Era",
+      "type": "string"
+    },
+    "persona_id": {
+      "description": "kebab-case id, e.g. 'kant'.",
+      "title": "Persona Id",
+      "type": "string"
+    },
+    "personality": {
+      "$ref": "#/$defs/PersonalityTraits"
+    },
+    "preferred_zones": {
+      "items": {
+        "$ref": "#/$defs/Zone"
+      },
+      "title": "Preferred Zones",
+      "type": "array"
+    },
+    "primary_corpus_refs": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Primary Corpus Refs",
+      "type": "array"
+    },
+    "schema_version": {
+      "default": "0.1.0-m2",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "persona_id",
+    "display_name",
+    "era",
+    "personality",
+    "cognitive_habits",
+    "preferred_zones"
+  ],
+  "title": "PersonaSpec",
+  "type": "object"
+}
