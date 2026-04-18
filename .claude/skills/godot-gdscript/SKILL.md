@@ -127,20 +127,28 @@ func _ready() -> void:
 ## ルール 3: ControlEnvelope の処理
 
 ControlEnvelope は `kind` フィールドでメッセージ種別を識別する。
+schemas.py §7 が定義する 7 kind: `handshake` / `agent_update` / `speech` /
+`move` / `animation` / `world_tick` / `error`。
 
 ```gdscript
-# ✅ 良い例 — kind で分岐
+# ✅ 良い例 — kind で分岐 (schemas.py §7 と一致)
 func _on_envelope_received(envelope: Dictionary) -> void:
     var kind: String = envelope.get("kind", "")
     match kind:
-        "agent_state":
-            _update_agent(envelope)
-        "agent_move":
-            _move_agent(envelope)
-        "speech_bubble":
-            _show_speech(envelope)
-        "mode_change":
-            _change_mode(envelope)
+        "handshake":
+            _negotiate_capabilities(envelope)
+        "agent_update":
+            _apply_agent_state(envelope["agent_state"])
+        "speech":
+            _spawn_speech_bubble(envelope)
+        "move":
+            _start_navigation(envelope["target"], envelope["speed"])
+        "animation":
+            _set_animation(envelope["animation_name"], envelope["loop"])
+        "world_tick":
+            _update_clock(envelope["wall_clock"])
+        "error":
+            push_error("gateway error: %s — %s" % [envelope["code"], envelope["detail"]])
         _:
             push_warning("Unknown envelope kind: %s" % kind)
 ```
@@ -148,8 +156,16 @@ func _on_envelope_received(envelope: Dictionary) -> void:
 ```gdscript
 # ❌ 悪い例 — kind チェックなし
 func _on_envelope_received(envelope: Dictionary) -> void:
-    _update_agent(envelope)  # kind が何であっても agent 更新してしまう
+    _apply_agent_state(envelope)  # kind が何であっても agent 更新してしまう
 ```
+
+**注意**: ERRE モード遷移は `ControlEnvelope.kind` には含まれない。
+モード切替は `Observation.event_type="erre_mode_shift"` として表現され、
+通常 `agent_update.agent_state.erre.name` の変化として観測される
+(schemas.py §5 / §4 参照)。
+
+**wire fixture の参照先**: `fixtures/control_envelope/*.json` に各 kind の
+realistic な JSON specimen + README がある。GDScript 実装前に読むこと。
 
 ## ルール 4: 5 ゾーンのシーン構造
 
