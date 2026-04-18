@@ -45,6 +45,8 @@ erre-sandbox/
 │   ├── dogen.yaml              # 道元
 │   ├── aristotle.yaml          # アリストテレス
 │   └── ...                     # ソロー、キェルケゴール、ルソー等
+├── fixtures/                   # Wire contract specimens (言語中立)
+│   └── control_envelope/       # ControlEnvelope 各 kind の JSON + README
 ├── corpora/                    # PD ソース (青空文庫/Gutenberg/archive.org)
 ├── tests/                      # pytest-asyncio テスト
 │   ├── conftest.py
@@ -104,6 +106,13 @@ erre-sandbox/
 ### `personas/`
 - **目的**: 偉人ペルソナの YAML 定義と LoRA 設定
 - **構造**: 1 偉人 1 YAML ファイル。事実/伝説フラグ付き認知習慣リスト含む
+
+### `fixtures/`
+- **目的**: Wire contract の言語中立な specimen (Python + Godot + 将来の他言語クライアントが参照)
+- **構造**: `schemas.py` の discriminated union (例: §5 Observation, §7 ControlEnvelope) 1 つにつき 1 サブディレクトリを作り、その配下に `*.json` と README を置く
+- **初期メンバ**: `control_envelope/` (T07 で追加)
+- **置くべきでないもの**: 単なるテスト用の throwaway データ (→ `tests/` 配下のインライン dict)
+- **関連**: `src/erre_sandbox/schemas.py` が唯一の真実。fixture はそこから派生する specimen
 
 ### `corpora/`
 - **目的**: パブリックドメインの一次史料テキスト
