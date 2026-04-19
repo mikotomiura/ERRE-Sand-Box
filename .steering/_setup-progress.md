@@ -419,6 +419,69 @@
     ruff / format / mypy --strict 全緑
   - 記録: `.steering/20260419-gateway-fastapi-ws/`
     (requirement / design / design-v1 / design-comparison / decisions / tasklist)
-- [ ] T18 ui-dashboard-minimal (optional、MacBook)
-- [ ] T19 m2-integration-e2e (両機)
-- [ ] T20 m2-acceptance (両機)
+- [x] **T18 ui-dashboard-minimal** (MacBook, 2026-04-19, PR #25)
+  - MVP Observability の optional 層: FastAPI mini app + typed `UiMessage` + stub
+    エンドポイント。T14 gateway とは独立プロセスで、`ui/godot_bridge.py` (Python 側)
+    や Streamlit/HTMX ダッシュボードに差し替え可能なインターフェース雛形
+  - 記録: `.steering/20260419-ui-dashboard-minimal/` (requirement / design / design-v1 /
+    design-comparison / decisions / tasklist)
+  - commit: `a414886 feat(ui): T18 ui-dashboard-minimal — FastAPI mini + typed UiMessage + stub`
+
+- [x] **T19 m2-integration-e2e (design phase)** (両機, 2026-04-19, PR #23)
+  - Contract 層の契約凍結と scenario テスト雛形の整備。`src/erre_sandbox/integration/`
+    配下に `contract` module を追加、Layer A/B/C 観点の skeleton tests を
+    先に書く設計駆動フェーズ
+  - `integration-contract.md` / `metrics.md` / `scenarios.md` /
+    `t20-acceptance-checklist.md` を同時整備し、T20 検収で参照される ACC 項目を
+    事前確定
+  - 記録: `.steering/20260419-m2-integration-e2e/` (requirement / design / design-v1 /
+    design-comparison / decisions / integration-contract / metrics / scenarios /
+    t20-acceptance-checklist / tasklist)
+  - commit: `5423b26 feat(integration): T19 m2-integration-e2e — contract module + skeleton tests (design phase)`
+
+- [x] **T19 m2-integration-e2e (execution phase)** (両機, 2026-04-19, PR #27 + PR #28)
+  - PR #23 で用意した scenario skeleton tests を `unskip` + Layer B (`TestClient`
+    integration) / Layer C (smoke) を稼働。続いて MacBook 側で Godot 4.6 Editor 上に
+    live WebSocket 接続を実装、client 側 `HandshakeMsg` 送出を追加して
+    gateway `session ACTIVE` まで到達
+  - 検証の過程で **GAP-1〜GAP-5** が発覚:
+    - GAP-1 `WorldRuntime ↔ Gateway` 配線 (`_NullRuntime` 依存) → M4 繰越
+    - GAP-2 Godot live 自動 E2E テスト未整備 → M7 検討
+    - GAP-3 session counter 監視運用未策定 → T20 で解消
+    - GAP-4 Godot 4.6 diff 削減 (記録のみ)
+    - GAP-5 `_NullRuntime` docs 未反映 → T20 で解消
+  - 記録: `.steering/20260419-m2-integration-e2e-execution/` (requirement / design /
+    decisions / handoff-to-macbook / known-gaps / macbook-verification / tasklist)
+  - commits:
+    - `df00a1e feat(integration): T19 execution — unskip scenario tests + Layer B/C smoke`
+    - `6c6be16 feat(godot): T19 MacBook live integration — client HandshakeMsg + 4.6 upgrades`
+
+- [x] **T20 m2-acceptance** (両機, 2026-04-19, tag `v0.1.0-m2` 付与)
+  - MVP M2 検収。**6 ACC 全 PASS** (`ACC-SCENARIO-WALKING` / `ACC-SESSION-COUNTER` /
+    `ACC-DOCS-UPDATED` / `ACC-HANDSHAKE` / `ACC-SCHEMA-COMPAT` / `ACC-DISCONNECT-RECONNECT`)
+  - GAP 解消: GAP-3 (`session-counter-runbook.md` + 実測 evidence 90s `sessions=0` 定着) /
+    GAP-5 (`docs/architecture.md` §Gateway に `_NullRuntime` 注意書き追加)。
+    GAP-1 は M4 `gateway-multi-agent-stream` に繰越、GAP-2 は M7、GAP-4 は記録のみ
+  - §3 disconnect/reconnect 実機検証: `RECONNECT_DELAY: 5.0 → 2.0` (commit `d52ee8c` +
+    `.claude/skills/godot-gdscript/patterns.md §1` 同期更新) により、**reconnect 2.1s**
+    (MacBook ms 粒度) + **≤ 1s 観測** (G-GEAR 1Hz 粒度) の 2 系統で MVP 検収条件
+    「WS 切断で 3 秒以内自動再接続」(MASTER-PLAN §4.4) を PASS
+  - Evidence 3 層構造: ① MacBook ms 粒度 Godot timestamp / ② G-GEAR `localhost:8000/health`
+    1Hz probe / ③ uvicorn server-side `WebSocket /ws/observe [accepted]` log
+    (Mac IP `192.168.3.118` から ×2 連続 accept を裏取り)
+  - 記録: `.steering/20260419-m2-acceptance/` (requirement / design / decisions /
+    acceptance-checklist / handoff-to-g-gear / session-counter-runbook / tasklist /
+    evidence/README.md + 11 本の probe/restart log)
+  - PR 系譜:
+    - PR #28 (`6c6be16`): MacBook live integration + 残存課題記録
+    - PR #29 (`8167076`): T20 M2 acceptance closeout — GAP-3/5 解消 + checklist 本体作成
+    - PR #30 (`16b6d0e`): ACC-SESSION-COUNTER 実測 evidence (`sessions=0` 定着 90s)
+    - PR #31 (`2cdbf6e`): G-GEAR 側 localhost cycle evidence (4 auto-reconnect サイクル)
+    - PR #32 (`d52ee8c` + `9fa33e9`): `RECONNECT_DELAY` 短縮 + 2.1s reconnect 実測、
+      merge 時に `v0.1.0-m2` tag 付与
+    - PR #33: フル diff 版を別路線で作成したが PR #32 と conflict のため close、
+      PR #34 に最小変更分割
+    - PR #34 (`452b28b`): G-GEAR 側 localhost probe 補強 evidence (1Hz 粒度の裏取り)
+  - **M2 closeout 宣言**: Contract layer (WS/Handshake/Session FSM/Schema) 完全動作、
+    GAP-1 (WorldRuntime↔Gateway 配線) のみ M4 に繰越。次マイルストーンは **M4
+    `gateway-multi-agent-stream`** で full-stack orchestrator 実装
