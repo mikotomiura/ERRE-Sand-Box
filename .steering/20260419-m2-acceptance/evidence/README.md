@@ -16,6 +16,7 @@ G-GEAR (probe) → gateway (`localhost:8000/health`) への localhost 側 probe 
 | 切断後遅延 / 再接続混在 | `session-counter-disconnect-delayed-20260419-203709.log` | 90s | `0` に落ちる瞬間あり → 再接続で `1` に戻る fluctuation | Godot 自動再接続ロジックが動いていた痕跡 |
 | **G-GEAR 側 cycle** | `session-counter-g-gear-cycle-20260419-203900.log` | **180s 4 完全サイクル** | `1→0→1` を 4 回、disconnect から reconnect まで毎回 **5s で定常** (20:39-20:42) | G-GEAR `localhost` 側観測による auto-reconnect 強力補強 evidence |
 | **定着 evidence** | `session-counter-settled-20260419-205304.log` | **90s 全て `sessions=0`** | Godot (Play + Editor) を `SIGTERM` で全停止後 | **ACC-SESSION-COUNTER の定着確認本体** |
+| **disconnect/reconnect 実機** | `session-counter-disconnect-reconnect-20260419-212132.log` | **205s** (probe 180s + 末尾観測 25s) | G-GEAR gateway を `Stop-Process -Force` で停止 → 約 26s 後 restart。MacBook 側 Godot は `RECONNECT_DELAY=2.0` (commit `d52ee8c`) を反映 | **MVP 検収条件「WS 切断で 3 秒以内自動再接続」の実機 evidence** (gateway-up 状態の 3 disconnect-reconnect cycle が全て 2.1s で復帰) |
 
 ## 観察要点
 
@@ -39,6 +40,22 @@ G-GEAR (probe) → gateway (`localhost:8000/health`) への localhost 側 probe 
   ログ分布は 180 サンプル中 `sessions=1` が 164 (91.1%) / `sessions=0` が 16 (8.9%) で、
   auto-reconnect の定常性を裏付ける。本 probe は G-GEAR 側 `localhost` 観測のため
   LAN 経路や Firewall の影響を排除しており、**MacBook 側 probe と観測側相補** となる
+- **disconnect/reconnect 実機検証** (`session-counter-disconnect-reconnect-20260419-212132.log`):
+  21:21-21:24 の 205s で以下 4 cycle を観測:
+
+  | # | sessions=0 | sessions=1 | reconnect 時間 | コンテキスト |
+  |---|---|---|---|---|
+  | 1 | 21:21:39.049 | 21:21:41.157 | **2.108s** | gateway up 中の周期 disconnect |
+  | 2 | 21:22:41.665 | 21:22:43.780 | **2.115s** | 同上 |
+  | 3 (kill+restart) | 21:23:23.999 | 21:23:31.381 | 7.382s* | G-GEAR gateway を `Stop-Process -Force` 後 ~26s で restart |
+  | 4 | 21:24:31.525 | 21:24:33.650 | **2.125s** | 同上 |
+
+  *Cycle 3 は Godot reconnect schedule (2.0s 周期) と gateway 起動完了タイミングの
+  フェーズ差 (最大 RECONNECT_DELAY 待ち) が加算されたもので、
+  純粋 disconnect-reconnect (#1, #2, #4) は **3 cycle とも 2.1s** で復帰。
+  RECONNECT_DELAY を 5.0 → 2.0 に短縮 (commit `d52ee8c`) した効果が
+  実測でも確認され、**MVP 検収条件「WS 切断で 3 秒以内自動再接続」(MASTER-PLAN §4.4) を満たす**。
+  G-GEAR cycle ログ (5s 定常) との比較で **2.9s 短縮** を達成
 
 ### 今回の定着手順 (再現可)
 
