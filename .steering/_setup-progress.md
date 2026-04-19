@@ -287,6 +287,39 @@
   - 記録: `.steering/20260419-godot-peripatos-scene/`
     (requirement / design / design-v1 / design-comparison / decisions /
     blockers / tasklist)
+- [x] **T11 inference-ollama-adapter** (G-GEAR, 2026-04-19, feature branch)
+  - Phase P G-GEAR 側ラインの 2 件目、T10 `EmbeddingClient` と対称な
+    Ollama `/api/chat` 薄クライアント
+  - `src/erre_sandbox/inference/sampling.py` — 純粋関数
+    `compose_sampling(SamplingBase, SamplingDelta) -> ResolvedSampling` +
+    `_clamp` で 3 値を `[0.01, 2.0] / [0.01, 1.0] / [0.5, 2.0]` にクランプ
+  - `src/erre_sandbox/inference/ollama_adapter.py` — `OllamaChatClient`
+    (ClassVar defaults / httpx.AsyncClient DI / async with / is_closed
+    idempotent close) + `ChatMessage` / `ChatResponse` (frozen) +
+    `OllamaUnavailableError` 1 種に httpx 4 種例外を正規化
+  - `inference/__init__.py` — 7 シンボル top-level re-export
+    (`OllamaChatClient`, `ChatMessage`, `ChatResponse`,
+    `OllamaUnavailableError`, `ResolvedSampling`, `compose_sampling`,
+    `DEFAULT_CHAT_MODEL`)
+  - `tests/test_inference/` 新規 (23 件): sampling 8 件 (境界値上下完備) /
+    adapter 15 件 (MockTransport + `test_close_is_idempotent` +
+    `test_injected_client_not_closed_by_adapter`)
+  - 設計フロー: v1 素直案 (error-handling examples.md 直移植、10 弱点) →
+    `/reimagine` で v2 再生成 → v2 フル採用 (V1-W1/W2/W4/W5/W6/W7/W8/W9 を
+    構造で解消)
+  - 設計判断 8 件: D1 Contract-First 採用 / D2 `/api/chat` / D3 frozen
+    ChatResponse / D4 sampling 分離 / D5 sampling 後勝ち / D6 エラー正規化 /
+    D7 `qwen3:8b` default / D8 7 シンボル re-export
+  - code-reviewer HIGH 2 + MEDIUM 5 + LOW 4、security-checker MEDIUM 2 + LOW 4
+    を総合評価 → 即対応 6 件 + 保留 5 件 (blockers.md BL-1〜BL-5)
+  - 全テスト 157 passed / 23 skipped (134 baseline から +23)、ruff / format /
+    mypy 全緑
+  - 記録: `.steering/20260419-inference-ollama-adapter/`
+    (requirement / design / design-v1 / design-comparison / decisions /
+    blockers / tasklist)
+- [ ] T12 cognition-cycle-minimal (G-GEAR)
+- [ ] T13 world-tick-zones (G-GEAR)
+- [ ] T14 gateway-fastapi-ws (G-GEAR)
 - [ ] T18 ui-dashboard-minimal (optional、MacBook)
 - [ ] T19 m2-integration-e2e (両機)
 - [ ] T20 m2-acceptance (両機)
