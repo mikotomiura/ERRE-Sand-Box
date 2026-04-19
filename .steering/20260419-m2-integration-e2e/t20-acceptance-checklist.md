@@ -102,6 +102,25 @@ ls -la logs/ | grep m2-acceptance
 ```
 **合格**: scenario 実行中のタイムスタンプ網羅、ファイルサイズが妥当
 
+### [ ] ACC-SESSION-COUNTER (T19 GAP-3 対応、新規追加)
+**確認**: gateway `/health` の `active_sessions` が Godot 接続時に 1 以上、切断時に 0 に戻る
+**実行**:
+```bash
+# MacBook 側: Godot を起動していない状態で 1 回
+curl -s http://192.168.3.85:8000/health | jq .active_sessions
+# → 0
+
+# Godot で MainScene を Play した直後
+curl -s http://192.168.3.85:8000/health | jq .active_sessions
+# → 1
+
+# Godot Play 停止後
+curl -s http://192.168.3.85:8000/health | jq .active_sessions
+# → 0
+```
+**合格**: 3 時点の値が `0 / 1 / 0` の順で観測される
+**根拠**: `known-gaps.md` GAP-3 参照
+
 ---
 
 ## カテゴリ: reproducibility
@@ -126,6 +145,12 @@ diff logs/run1.jsonl logs/run2.jsonl
 **確認**: `docs/architecture.md` の WS / Gateway セクションが T14 完成版に更新
 **実行**: `git log --follow docs/architecture.md` を確認
 **合格**: T14 関連の commit (scope: docs) が main に含まれる
+
+**T19 GAP-5 対応 (更新内容に含めること)**:
+- Gateway default は `_NullRuntime` であり debug 専用であることを明記
+- production 起動では `WorldRuntime` を `make_app(runtime=...)` に inject 必須
+- 単一 entry point (M4 `full-stack-orchestrator`) が整備されるまでの暫定運用
+  (テストコード内の `MockRuntime`, または手動で WorldRuntime を組み立てる) を記載
 
 ### [ ] ACC-MASTER-PLAN-SYNC
 **確認**: MASTER-PLAN tasklist の T14/T19/T20 が完了マーク + PR 番号併記
