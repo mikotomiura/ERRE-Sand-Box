@@ -119,6 +119,11 @@ async def bootstrap(cfg: BootConfig) -> None:
 
     async with AsyncExitStack() as stack:
         memory = MemoryStore(db_path=cfg.db_path)
+        # Ensure the sqlite schema exists before any cognition tick runs. Without this
+        # the first `Retriever.retrieve(...)` call raises
+        # `sqlite3.OperationalError: no such table: episodic_memory`. `create_schema`
+        # uses `CREATE TABLE IF NOT EXISTS`, so it is safe to call on every startup.
+        memory.create_schema()
         stack.push_async_callback(memory.close)
 
         embedding = EmbeddingClient(model=cfg.embed_model, endpoint=cfg.ollama_url)
