@@ -37,7 +37,7 @@
 - [x] T18 `ui-dashboard-minimal` (MacBook, 0.5d, PR #25) — FastAPI mini app + Web Component ダッシュボード (SnapshotMsg/DeltaMsg/AlertMsg の 3-kind union) + 決定論的 stub generator、24 tests PASS
 
 ### Phase I: Integration
-- [ ] T19 `m2-integration-e2e` (両機, 1d) — **設計フェーズ (PR #23)** 完了、**G-GEAR 側実行フェーズ (PR #27)** 完了: skeleton 11 件の `@pytest.mark.skip` を外し Layer B1/B2 実装で全 PASS、`FakeEmbedder` / `M2Logger` / `_ws_helpers.py` 追加、Layer C smoke run (Ollama + gateway `/health`) 1 回成功、329 passed / 23 skipped。**MacBook 側実行フェーズは未完** (Godot 実機 30Hz 描画検証 + `ws://g-gear.local:8000/ws/observe` ライブ接続確認)。`handoff-to-macbook.md` に引き継ぎ、MacBook セッション合流時に再開して T19 全体を closeout してから T20 へ
+- [x] T19 `m2-integration-e2e` (両機, 1d, PR #23 設計 + PR #27 実行 Python + 本 PR MacBook live) — 設計 (PR #23) + Python 側実行 (PR #27, 335 passed) + MacBook 側 Godot live integration (2026-04-19): WS `/ws/observe` への接続、client HandshakeMsg 送出、gateway session AWAITING → ACTIVE 遷移を視認で確認。Avatar streaming は gateway default `_NullRuntime` のため M4 `gateway-multi-agent-stream` へ繰越 (詳細: `.steering/20260419-m2-integration-e2e-execution/macbook-verification.md`)
 - [ ] T20 `m2-acceptance` (両機, 0.5d) — `v0.1.0-m2` タグ付与
 
 ## 本番構築版 (M4 → M10-11)
