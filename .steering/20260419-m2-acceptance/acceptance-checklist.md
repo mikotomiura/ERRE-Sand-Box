@@ -12,7 +12,7 @@ formalize し、T19 で発覚した GAP-3 / GAP-5 を本 T20 で解消する。
 | M2 commit baseline | `54f9046` (T19 完了後) |
 | Gateway schema_version | `0.1.0-m2` |
 | Godot version | 4.6.2.stable.official |
-| 対象ブランチ | `feature/t19-macbook-godot-integration` |
+| 対象ブランチ | `feature/t19-macbook-godot-integration` (T20 closeout) → `chore/t20-disconnect-reconnect-evidence` (RECONNECT_DELAY 短縮 + 実機検証) |
 
 ## 受け入れ項目
 
@@ -32,7 +32,7 @@ formalize し、T19 で発覚した GAP-3 / GAP-5 を本 T20 で解消する。
 |---|---|---|
 | Avatar Tween 移動の視認 | GAP-1 により `_NullRuntime` 依存で検証不可 | **M4 `gateway-multi-agent-stream`** で real runtime inject して再検証 |
 | 30Hz 描画 / WorldTickMsg 受信 | 同上 (envelope 流入なし) | 同上 |
-| disconnect → reconnect 実機確認 | T19 では未実施 | 次回 M4 実機時に検証 (ACC 外として継続観察) |
+| disconnect → reconnect 実機確認 | ✅ 実施済 (2026-04-19 21:21-21:24 JST) | gateway up 状態の auto-reconnect 3 cycle が **2.1s で復帰** → MVP 検収条件「3 秒以内自動再接続」PASS。Evidence: `evidence/session-counter-disconnect-reconnect-20260419-212132.log` |
 | Godot live 自動 E2E | GAP-2 により未整備 | **M7 observability-logging** で検討 |
 | Godot 4.6 diff 削減 | GAP-4 (記録のみ) | 対応しない |
 
