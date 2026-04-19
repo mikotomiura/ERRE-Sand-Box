@@ -165,3 +165,32 @@ git branch -D feature/m2-integration-e2e-execution
   理由: T19 設計フェーズで /reimagine 適用済みの v2 設計 (契約先行) に沿うだけで、
   実装アプローチは一意に決まっている (MockRuntime パターン再利用)。
   実装中にアーキ判断が浮上したら個別に /reimagine 検討。
+
+## 実装中に確定した追加判断 (post-implementation diff)
+
+当初の本設計書から **変更/追加** された項目を事後に記録する:
+
+1. **M2Logger にパストラバーサル防御を追加** (code-reviewer HIGH 対応)
+   - 当初: `M2_LOG_PATH` 環境変数の値をそのまま `Path(path)` で使用
+   - 変更後: `_ALLOWED_LOG_ROOT = <project>/logs/` を定義し、`Path(path).resolve().relative_to(_ALLOWED_LOG_ROOT)` で配下検証、違反時は `M2LogPathError` を raise
+   - 影響: `tests/test_integration/conftest.py`、新規クラス `M2LogPathError` / 定数 `_ALLOWED_LOG_ROOT`
+   - 実機テストで `C:/Windows/Temp/evil.jsonl` の rejection と `logs/*.jsonl` の acceptance を確認
+
+2. **prefix 検証テストを `fake_embedder` 単独依存に簡素化** (code-reviewer MED 6 対応)
+   - 当初: `memory_store_with_fake_embedder` fixture を受け取り store は捨てる設計
+   - 変更後: `fake_embedder` のみを fixture として受け取る (store 作成コスト省略)
+   - 影響: `tests/test_integration/test_scenario_memory_write.py::test_s_memory_write_embedding_prefix_applied`
+
+3. **`make_agent_state` fixture 参照に `MakeAgentState` 型エイリアスを付与** (code-reviewer MED 2 対応)
+   - 当初: fixture 引数は型注釈なし (`make_agent_state,`)
+   - 変更後: `make_agent_state: MakeAgentState` とし、`from tests.conftest import MakeAgentState` を TYPE_CHECKING ブロックに追加
+   - 影響: `test_scenario_walking.py` / `test_scenario_tick_robustness.py`
+
+4. **MASTER-PLAN T19 行を `[x]` でなく `[ ]` として扱う運用ルール確定**
+   - G-GEAR 側実行フェーズが完了しても、T19 全体 (MacBook 側 Godot 30Hz 実機検証) が
+     残っている限り MASTER-PLAN の T19 行には `[ ]` を維持する
+   - 両機タスクの closeout は MacBook セッション合流時に両機の実施状況を
+     確認して初めて `[x]` に昇格させる
+
+これら 4 件は本設計の意図 (機械可読契約 + Layer B/C 最小実装) を変えず、
+実装段階で明らかになった品質/運用上の改善のみを追加している。
