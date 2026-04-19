@@ -317,7 +317,47 @@
   - 記録: `.steering/20260419-inference-ollama-adapter/`
     (requirement / design / design-v1 / design-comparison / decisions /
     blockers / tasklist)
-- [ ] T12 cognition-cycle-minimal (G-GEAR)
+- [x] **T12 cognition-cycle-minimal** (G-GEAR, 2026-04-19, feature branch)
+  - MVP M2 の核となる 1 tick 認知パイプライン (1 エージェント分の CoALA + ERRE
+    9 ステップ)
+  - `src/erre_sandbox/cognition/state.py` — CSDG 半数式 (MASTER-PLAN B.3 MVP 優先 #2)
+    の pure function: `advance_physical(Physical, events) -> Physical`
+    (4 要素導出 sleep_quality / physical_energy / mood_baseline / cognitive_load) +
+    `apply_llm_delta(Cognitive, LLMPlan) -> Cognitive`
+    (valence/arousal/motivation/stress)、`StateUpdateConfig` dataclass で係数調整可、
+    `Random` 注入で決定論化
+  - `src/erre_sandbox/cognition/parse.py` — `LLMPlan(frozen BaseModel, 8 フィールド)`
+    + `parse_llm_plan(text)` JSON 抽出 (code fence 許容、brace balancer で引用内
+    ブレース処理) + `MAX_RAW_PLAN_BYTES=64KB` DoS ガード (security M1 対応)
+  - `src/erre_sandbox/cognition/prompting.py` — 3-stage system prompt
+    (`_COMMON_PREFIX` → persona 固有 → 動的 tail、RadixAttention 最適化) +
+    `build_user_prompt` (最新観察 + memories + JSON スキーマヒント)
+  - `src/erre_sandbox/cognition/importance.py` — event_type lookup +
+    intensity/emotional_impact/importance_hint 補正 → `[0, 1]` clamp
+  - `src/erre_sandbox/cognition/cycle.py` — `CognitionCycle.step()` 9-step
+    orchestrator + `CycleResult(frozen BaseModel, llm_fell_back flag)` +
+    `CognitionError`。LLM/Embed 不通と parse 失敗の 3 経路を単一 fallback に
+    畳み込み、それ以外は crash-loud (error-handling Skill §ルール 5)
+  - `cognition/__init__.py` — 13 シンボル top-level re-export
+  - `tests/test_cognition/` 新規 46 件: importance 7 / parse 11 / state 10 /
+    prompting 8 / cycle 10 (happy path + ollama-fail + parse-fail +
+    embedding-fail + reflection trigger + sampling override + speech/move 分岐)
+  - `pyproject.toml` — `tests/**` per-file-ignores に `S311` 追加 (テスト seed
+    用途での Random 許容)
+  - 設計フロー: v1 素直案 (1 関数、regex parse、except 握りつぶし、12 弱点) →
+    `/reimagine` → v2 (5 モジュール分離 + Pydantic LLMPlan + pure state + RNG DI +
+    fallback フラグ) フル採用
+  - 設計判断 10 件 (decisions.md): D1 5-module v2 / D2 JSON+Pydantic parse /
+    D3 sampling 型強制 / D4 RNG DI 決定論 / D5 種類別 catch / D6 llm_fell_back
+    side-channel / D7 3-stage prompt / D8 StateUpdateConfig 係数外出し /
+    D9 Reflection トリガーのみ / D10 tests S311 許容
+  - code-reviewer HIGH 2 + MEDIUM 5 + LOW 4、security-checker MEDIUM 2 + LOW 4
+    → 即対応 9 件 + 保留 9 件 (blockers.md BL-1〜BL-9)
+  - 全テスト 203 passed / 23 skipped (157 baseline から +46)、ruff / format /
+    mypy 全緑
+  - 記録: `.steering/20260419-cognition-cycle-minimal/`
+    (requirement / design / design-v1 / design-comparison / decisions /
+    blockers / tasklist)
 - [ ] T13 world-tick-zones (G-GEAR)
 - [ ] T14 gateway-fastapi-ws (G-GEAR)
 - [ ] T18 ui-dashboard-minimal (optional、MacBook)
