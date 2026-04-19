@@ -109,10 +109,16 @@ OpenGL API 4.1 Metal - 90.5 - Compatibility - Using Device: Apple - Apple M4
 
 ## 構造的ギャップ (発見事項)
 
-`python -m erre_sandbox.integration.gateway` は default で `_NullRuntime`
-(`gateway.py:444-458`) を使うため、`recv_envelope()` が永久に sleep し、
-**実 envelope が broadcast されない**。結果として Avatar 描画の視認検証は
-現時点の単体 gateway 実行では不可能。
+本 live 検証の過程で **構造的ギャップ 5 件 (GAP-1 〜 GAP-5)** を発見した。
+詳細と対処方針は `known-gaps.md` に集約している。
+
+| ID | タイトル | 影響 | 対処 |
+|---|---|---|---|
+| GAP-1 | `_NullRuntime` 依存で WorldRuntime↔Gateway 配線欠落 | Avatar live 検証不可 | **M4 `full-stack-orchestrator` タスク新設 (最優先)** |
+| GAP-2 | Godot live の自動化テストなし | リグレッション検出不可 | M7 observability で検討 |
+| GAP-3 | `/health` active_sessions counter 監視運用なし | silent failure 検出不能 | T20 `ACC-SESSION-COUNTER` 追加済 |
+| GAP-4 | Godot 4.6 auto-upgrade で diff 肥大化 | レビュー負担 | 記録のみ (許容) |
+| GAP-5 | `_NullRuntime` 注意書きが docs に未反映 | 初見ハマり | T20 `ACC-DOCS-UPDATED` 拡張済 |
 
 ### 結論
 
@@ -120,8 +126,10 @@ T19 (m2-integration-e2e) は **M2 スコープ内で達成可能な layer は全
 
 - Network / WS / Handshake / Session FSM / Schema compat
 
-Avatar streaming (WorldRuntime → Gateway の実配線) は M2 のスコープ外とし、
-**M4 `gateway-multi-agent-stream` タスクで wiring する** ことを提案。
+一方で **end-to-end 配線 (GAP-1)** は M2 スコープ外であり、
+MVP 完了 (v0.1.0-m2 タグ) 後の M4 で `full-stack-orchestrator` として新設する。
+
+詳細: [`known-gaps.md`](known-gaps.md)
 
 ## 本セッションで入れたコード変更
 
