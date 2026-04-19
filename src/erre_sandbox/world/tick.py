@@ -40,6 +40,7 @@ from erre_sandbox.schemas import (
     ZoneTransitionEvent,
 )
 from erre_sandbox.world.physics import Kinematics, apply_move_command, step_kinematics
+from erre_sandbox.world.zones import default_spawn, locate_zone
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -397,6 +398,21 @@ class WorldRuntime:
         rt.kinematics.position = res.agent_state.position
         for env in res.envelopes:
             if isinstance(env, MoveMsg):
+                # Resolve a "zone-only" MoveMsg (coords unchanged from current
+                # position, only zone field differs) to the target zone's spawn
+                # point. CognitionCycle._build_envelopes emits this shape when
+                # the LLM returns a destination_zone, relying on the world
+                # layer to map semantic zone -> physical coordinates. Without
+                # this resolution, step_kinematics would see dest == position,
+                # mark "arrived immediately", and never cross a zone boundary
+                # -> pending observations stay empty -> episodic_memory never
+                # populates (GAP-1 blocker for MASTER-PLAN §4.4 #3).
+                tgt = env.target
+                if locate_zone(tgt.x, tgt.y, tgt.z) is not tgt.zone:
+                    resolved = default_spawn(tgt.zone).model_copy(
+                        update={"yaw": tgt.yaw, "pitch": tgt.pitch},
+                    )
+                    env = env.model_copy(update={"target": resolved})
                 apply_move_command(rt.kinematics, env)
             self._envelopes.put_nowait(env)
 
