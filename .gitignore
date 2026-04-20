@@ -48,3 +48,7 @@ logs/
 # T21 runtime artifacts
 var/
 .claude/scheduled_tasks.lock
+
+# Throwaway spike / ad-hoc scripts (M5 m5-llm-spike で追加)
+# commit 対象外の spike 成果物を誤 commit しないための隔離ディレクトリ
+_ad_hoc/
