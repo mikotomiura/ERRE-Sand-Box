@@ -27,6 +27,12 @@ from erre_sandbox.cognition.prompting import (
     build_user_prompt,
     format_memories,
 )
+from erre_sandbox.cognition.reflection import (
+    DEFAULT_REFLECTIVE_ZONES,
+    ReflectionPolicy,
+    Reflector,
+    build_reflection_messages,
+)
 from erre_sandbox.cognition.state import (
     DEFAULT_CONFIG,
     StateUpdateConfig,
@@ -36,14 +42,18 @@ from erre_sandbox.cognition.state import (
 
 __all__ = [
     "DEFAULT_CONFIG",
+    "DEFAULT_REFLECTIVE_ZONES",
     "RESPONSE_SCHEMA_HINT",
     "CognitionCycle",
     "CognitionError",
     "CycleResult",
     "LLMPlan",
+    "ReflectionPolicy",
+    "Reflector",
     "StateUpdateConfig",
     "advance_physical",
     "apply_llm_delta",
+    "build_reflection_messages",
     "build_system_prompt",
     "build_user_prompt",
     "estimate_importance",
