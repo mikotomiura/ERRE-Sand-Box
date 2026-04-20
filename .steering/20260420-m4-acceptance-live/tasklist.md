@@ -25,7 +25,7 @@
 - [x] **#2** 3-agent walking 60s — `evidence/cognition-ticks-20260420T155354.log`
 - [x] **#3** Reflection + semantic_memory — `evidence/semantic-memory-dump-20260420T155606.txt`
 - [x] **#4** Dialog — `evidence/dialog-trace-20260420T161518.log` (initiate × 1 + close × 4)
-- [ ] **#5** Godot 3-avatar 30Hz — MacBook 側で録画・追 commit 予定
+- [x] **#5** Godot 3-avatar 30Hz — `evidence/godot-3avatar-20260420-1625.mp4` (MacBook commit `22841d5`, operator が fps 28-32 目視確認)
 
 ## Step 5: acceptance.md まとめ (完了)
 - [x] `acceptance.md` に 5 項目の PASS/PENDING を表形式で記載
@@ -35,12 +35,14 @@
 - 5 項目中 1-4 は PASS、#5 は PENDING のみ
 
 ## Step 7: commit + PR
-- [ ] 本 evidence (#1-#4) を commit
+- [x] evidence #1-#4 commit (G-GEAR local `b3b22cc`)
+- [x] evidence #5 commit (MacBook `22841d5`、main merged via PR #50)
+- [x] acceptance/README/tasklist の全 PASS 反映 commit
 - [ ] `git push -u origin feature/m4-acceptance-live-evidence`
-- [ ] `gh pr create` で PR 作成 (evidence #5 追完後 or draft で先行)
+- [ ] `gh pr create` で PR 作成
 
 ## Step 8: v0.2.0-m4 タグ (pending、ユーザー判断)
-- [ ] 5 項目全 PASS 確定後、ユーザーに `v0.2.0-m4` タグ付与の是非を確認
+- [ ] PR merge 後、ユーザーに `v0.2.0-m4` タグ付与の是非を確認
 
 ## Gateway / DB のクリーンアップ
 - [ ] Gateway プロセスの最終停止 (MacBook #5 完了後)
