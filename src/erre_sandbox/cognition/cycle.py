@@ -31,6 +31,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from erre_sandbox.cognition.importance import estimate_importance
 from erre_sandbox.cognition.parse import parse_llm_plan
 from erre_sandbox.cognition.prompting import build_system_prompt, build_user_prompt
+from erre_sandbox.cognition.reflection import Reflector
 from erre_sandbox.cognition.state import (
     DEFAULT_CONFIG,
     StateUpdateConfig,
@@ -53,6 +54,7 @@ from erre_sandbox.schemas import (
     MemoryKind,
     MoveMsg,
     Physical,
+    ReflectionEvent,
     SpeechMsg,
     Zone,
 )
@@ -85,6 +87,10 @@ class CycleResult(BaseModel):
     new_memory_ids: list[str] = Field(default_factory=list)
     reflection_triggered: bool = False
     llm_fell_back: bool = False
+    reflection_event: ReflectionEvent | None = None
+    """Produced reflection, if any. ``None`` means the policy declined *or*
+    the distillation path failed (LLM / embedding outage) — the
+    ``reflection_triggered`` flag distinguishes the two."""
 
 
 class CognitionError(RuntimeError):
@@ -125,6 +131,7 @@ class CognitionCycle:
         llm: OllamaChatClient,
         rng: Random | None = None,
         update_config: StateUpdateConfig | None = None,
+        reflector: Reflector | None = None,
     ) -> None:
         self._retriever = retriever
         self._store = store
@@ -132,6 +139,15 @@ class CognitionCycle:
         self._llm = llm
         self._rng = rng
         self._update_config = update_config or DEFAULT_CONFIG
+        # Default reflector uses the same infra as the cycle. Injecting an
+        # explicit instance is the supported extension point for tests and
+        # for multi-agent orchestration (#6) that want to share a single
+        # policy across all agents.
+        self._reflector = reflector or Reflector(
+            store=store,
+            embedding=embedding,
+            llm=llm,
+        )
 
     async def step(
         self,
@@ -232,7 +248,7 @@ class CognitionCycle:
             rng=self._rng,
         )
 
-        # Step 9: assemble CycleResult.
+        # Step 9: assemble the post-tick state + envelopes.
         new_state = agent_state.model_copy(
             update={
                 "tick": agent_state.tick + 1,
@@ -241,12 +257,24 @@ class CognitionCycle:
             },
         )
         envelopes = self._build_envelopes(new_state, plan)
+
+        # Step 10: reflection. Delegated to a collaborator so trigger policy
+        # and LLM-distillation plumbing live outside this module. The
+        # reflector never raises: outages resolve to ``reflection_event=None``.
+        reflection_event = await self._reflector.maybe_reflect(
+            agent_state=new_state,
+            persona=persona,
+            observations=observations,
+            importance_sum=importance_sum,
+        )
+
         return CycleResult(
             agent_state=new_state,
             envelopes=envelopes,
             new_memory_ids=new_memory_ids,
             reflection_triggered=reflection_triggered,
             llm_fell_back=False,
+            reflection_event=reflection_event,
         )
 
     # ------------------------------------------------------------------

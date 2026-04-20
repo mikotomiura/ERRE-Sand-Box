@@ -82,7 +82,8 @@
 - **主要コンポーネント**:
   - asyncio tick loop: 30Hz (物理) / 0.1Hz (認知)
   - PIANO モジュール: memory, social, goal, action, speech の5並列認知モジュール
-  - CoALA 認知サイクル: Observe → Appraise → Update State → Retrieve → Reflect? → Plan → Act → Speak
+  - CoALA 認知サイクル: Observe → Appraise → Update State → Retrieve → Plan → Act → Speak → Reflect?
+    (M4: Reflect 工程は `Reflector` collaborator に委譲、policy で発火)
   - ERRE モード FSM: peripatetic / chashitsu / zazen / shu_kata / ha_deviate / ri_create / deep_work / shallow
 
 ### Memory Layer (G-GEAR)
@@ -181,6 +182,24 @@
 2. 直近の記憶群から「高次の洞察」を LLM で生成
 3. 洞察を Semantic memory に書き込み
 4. AgentState の emotion・goals を更新
+
+#### M4 実装 (`m4-cognition-reflection`, `schema_version=0.2.0-m4`)
+CognitionCycle は `Reflector` collaborator (`src/erre_sandbox/cognition/reflection.py`)
+を 1 tick の末尾で呼び出し、以下の 3 源どれかが満たされると 1 reflection を発火:
+- `ReflectionPolicy.importance_threshold` (default 1.5) — per-tick importance 合計
+- zone 入室 (peripatos / chashitsu) — `ZoneTransitionEvent.to_zone`
+- `tick_interval` (default 10) — Reflector 内 per-agent counter。`tick % N` では
+  なく counter なので、M4+ multi-agent で agent ごとに tick がずれても正しく発火
+
+発火時は `MemoryStore.list_by_agent(kind=EPISODIC, limit=window)` で直近 N 件を
+取り出し、reflection 専用 prompt (`build_reflection_messages`) で LLM に短い自然文
+要約を生成させる。要約を `embed_document` で埋め込み、`SemanticMemoryRecord`
+(origin_reflection_id を付与) として `upsert_semantic` で永続化し、
+`CycleResult.reflection_event: ReflectionEvent | None` に載せて返す。
+
+LLM / embedding outage は Reflector 内で catch し `reflection_event=None` を返す
+(action 選択の `llm_fell_back` とは独立)。embedding 失敗時は vec0 には書かず
+semantic_memory に row だけ作る (検索対象外; m4-memory-semantic-layer D7 と整合)。
 
 ### フロー 3: リプレイ
 1. Jupyter notebook から SQLite スナップショットを読み込み
