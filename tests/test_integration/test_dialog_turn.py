@@ -413,7 +413,7 @@ async def test_generate_turn_sends_spike_derived_options(
 @pytest.mark.parametrize(
     ("persona_id", "expected_hint"),
     [
-        ("kant", "Respond in English."),
+        ("kant", "日本語で応答せよ"),
         ("rikyu", "日本語で応答せよ"),
     ],
 )
