@@ -2,7 +2,7 @@
   {
     "schema_version": "0.3.0-m5",
     "tick": 0,
-    "sent_at": "2026-04-21T05:22:05.590696Z",
+    "sent_at": "2026-04-21T06:19:55.209717Z",
     "kind": "dialog_initiate",
     "initiator_agent_id": "a_kant_001",
     "target_agent_id": "a_nietzsche_001",
@@ -11,9 +11,9 @@
   {
     "schema_version": "0.3.0-m5",
     "tick": 5,
-    "sent_at": "2026-04-21T05:22:08.503768Z",
+    "sent_at": "2026-04-21T06:20:04.479978Z",
     "kind": "dialog_close",
-    "dialog_id": "d_1bbb2b8d",
+    "dialog_id": "d_0a7312ad",
     "reason": "exhausted"
   }
 ]
