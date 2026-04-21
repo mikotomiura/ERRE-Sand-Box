@@ -166,13 +166,58 @@ def _observation_line(obs: Observation) -> str:  # noqa: PLR0911 — discriminat
     return "[unknown] (unformatted)"
 
 
+_MAX_PROXIMITY_PER_TICK: Final[int] = 2
+"""Upper bound on :class:`~erre_sandbox.schemas.ProximityEvent` items kept in
+the user prompt per tick (M6-A-2b).
+
+Rationale: with ``recent_limit=10`` a chaotic multi-agent scene can easily
+fill every slot with proximity crossings (two agents pacing around each
+other cross twice per round), pushing the more rare signals
+(ZoneTransition / Biorhythm / ERREModeShift) out of the window entirely.
+Keeping only the two most-recent proximity events preserves the
+"somebody is near / just walked off" cue without starving the rest of the
+stream."""
+
+
+def _clamp_proximity(
+    recent: Sequence[Observation],
+    max_proximity: int = _MAX_PROXIMITY_PER_TICK,
+) -> list[Observation]:
+    """Drop all but the last ``max_proximity`` :class:`ProximityEvent`.
+
+    Preserves the relative order of every non-proximity observation and of
+    the surviving proximity entries. Implemented as a single left-to-right
+    pass after counting total proximity entries so the surviving window is
+    the *latest* ``max_proximity``, which is what the LLM should reason
+    about (recent crossings matter more than ancient co-walks).
+    """
+    total_proximity = sum(1 for o in recent if o.event_type == "proximity")
+    if total_proximity <= max_proximity:
+        return list(recent)
+    drop_before = total_proximity - max_proximity
+    skipped = 0
+    out: list[Observation] = []
+    for o in recent:
+        if o.event_type == "proximity" and skipped < drop_before:
+            skipped += 1
+            continue
+        out.append(o)
+    return out
+
+
 def build_user_prompt(
     observations: Sequence[Observation],
     memories: Sequence[RankedMemory],
-    recent_limit: int = 5,
+    recent_limit: int = 10,
 ) -> str:
-    """Build the user message: recent observations + memories + JSON contract."""
-    recent = list(observations)[-recent_limit:]
+    """Build the user message: recent observations + memories + JSON contract.
+
+    ``recent_limit`` (default 10 — widened from 5 in M6-A-2b) is the window
+    of the tail-most observations fed to the LLM. After slicing, the window
+    is rebalanced by :func:`_clamp_proximity` so a chatty proximity stream
+    cannot crowd out rarer signals.
+    """
+    recent = _clamp_proximity(list(observations)[-recent_limit:])
     obs_block = (
         "\n".join(_observation_line(o) for o in recent)
         if recent

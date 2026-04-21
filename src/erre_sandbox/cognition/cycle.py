@@ -50,6 +50,7 @@ from erre_sandbox.schemas import (
     AgentUpdateMsg,
     AnimationMsg,
     BiorhythmEvent,
+    Cognitive,
     ControlEnvelope,
     ERREMode,
     ERREModeShiftEvent,
@@ -58,6 +59,7 @@ from erre_sandbox.schemas import (
     MemoryEntry,
     MemoryKind,
     MoveMsg,
+    Observation,
     Physical,
     ReasoningTrace,
     ReasoningTraceMsg,
@@ -76,7 +78,6 @@ if TYPE_CHECKING:
     from erre_sandbox.memory import MemoryStore, RankedMemory, Retriever
     from erre_sandbox.schemas import (
         ERREModeName,
-        Observation,
         PersonaSpec,
         SamplingDelta,
     )
@@ -118,6 +119,16 @@ class CycleResult(BaseModel):
     """Produced reflection, if any. ``None`` means the policy declined *or*
     the distillation path failed (LLM / embedding outage) — the
     ``reflection_triggered`` flag distinguishes the two."""
+    follow_up_observations: list[Observation] = Field(default_factory=list)
+    """Observations deferred to the next tick (M6-A-2b).
+
+    Stress :class:`~erre_sandbox.schemas.BiorhythmEvent` crossings are the
+    only current consumer: they are detected in Step 8 **after** the LLM's
+    delta has already been applied, so there is no way to feed them into
+    the current prompt. The caller (:meth:`WorldRuntime._consume_result`)
+    appends this list to the agent's ``pending`` buffer so the next tick's
+    observation stream surfaces the signal one tick late — the intended
+    semantics for a post-LLM-derived readout."""
 
 
 class CognitionError(RuntimeError):
@@ -327,6 +338,19 @@ class CognitionCycle:
             rng=self._rng,
         )
 
+        # Step 8.5 (M6-A-2b): detect stress threshold crossings. Unlike the
+        # fatigue / hunger crossings in Step 2.25, stress lives in Cognitive
+        # which is only known AFTER the LLM call, so the event arrives one
+        # tick late by design. The runtime consumes
+        # ``CycleResult.follow_up_observations`` and appends them to the
+        # agent's pending buffer so the next tick's prompt sees the signal.
+        stress_events = _detect_stress_crossing(
+            previous=agent_state.cognitive,
+            current=new_cognitive,
+            agent_id=agent_state.agent_id,
+            tick=agent_state.tick + 1,
+        )
+
         # Step 9: assemble the post-tick state + envelopes.
         new_state = agent_state.model_copy(
             update={
@@ -366,6 +390,7 @@ class CognitionCycle:
             reflection_triggered=reflection_triggered,
             llm_fell_back=False,
             reflection_event=reflection_event,
+            follow_up_observations=list(stress_events),
         )
 
     # ------------------------------------------------------------------
@@ -594,7 +619,7 @@ class CognitionCycle:
 # ---------------------------------------------------------------------------
 
 
-def _observation_content_for_embed(obs: Observation) -> str:
+def _observation_content_for_embed(obs: Observation) -> str:  # noqa: PLR0911 — discriminator dispatch
     """Render *obs* into a single string suitable for Episodic storage + embed."""
     if obs.event_type == "perception":
         return f"[perception] {obs.content}"
@@ -608,6 +633,23 @@ def _observation_content_for_embed(obs: Observation) -> str:
         return f"[erre_mode_shift] {prev} -> {curr} ({obs.reason})"
     if obs.event_type == "internal":
         return f"[internal] {obs.content}"
+    if obs.event_type == "affordance":
+        return (
+            f"[affordance] {obs.prop_kind}#{obs.prop_id} in {obs.zone.value} "
+            f"(distance={obs.distance:.1f}m, salience={obs.salience:.2f})"
+        )
+    if obs.event_type == "proximity":
+        return (
+            f"[proximity {obs.crossing}] other={obs.other_agent_id} "
+            f"{obs.distance_prev:.1f}m -> {obs.distance_now:.1f}m"
+        )
+    if obs.event_type == "temporal":
+        return f"[temporal] {obs.period_prev.value} -> {obs.period_now.value}"
+    if obs.event_type == "biorhythm":
+        return (
+            f"[biorhythm {obs.signal}:{obs.threshold_crossed}] "
+            f"{obs.level_prev:.2f} -> {obs.level_now:.2f}"
+        )
     return "[unknown] (unformatted)"
 
 
@@ -670,6 +712,47 @@ def _detect_biorhythm_crossings(
             ),
         )
     return events
+
+
+def _detect_stress_crossing(
+    *,
+    previous: Cognitive,
+    current: Cognitive,
+    agent_id: str,
+    tick: int,
+) -> list[BiorhythmEvent]:
+    """Emit a stress :class:`BiorhythmEvent` if mid-band was crossed.
+
+    Parallel to :func:`_detect_biorhythm_crossings` for the ``stress`` signal
+    living on :class:`Cognitive`. Kept as a separate helper because:
+
+    * The watched vector differs (``Cognitive`` vs ``Physical``), so the
+      signatures would diverge if merged.
+    * Stress crossings are detected *after* the LLM call (Step 8) so the
+      emitted tick is ``agent_state.tick + 1`` — the tick the event will
+      belong to when the runtime surfaces it via
+      :attr:`CycleResult.follow_up_observations`. The fatigue/hunger helper
+      uses ``agent_state.tick`` because those events are same-tick inputs.
+
+    The returned list has at most one element (``stress`` is the only
+    watched signal on :class:`Cognitive`).
+    """
+    prev_val = previous.stress
+    curr_val = current.stress
+    crossed_up = prev_val < _BIORHYTHM_THRESHOLD <= curr_val
+    crossed_down = curr_val < _BIORHYTHM_THRESHOLD <= prev_val
+    if not (crossed_up or crossed_down):
+        return []
+    return [
+        BiorhythmEvent(
+            tick=tick,
+            agent_id=agent_id,
+            signal="stress",
+            level_prev=prev_val,
+            level_now=curr_val,
+            threshold_crossed="up" if crossed_up else "down",
+        ),
+    ]
 
 
 def _infer_shift_reason(

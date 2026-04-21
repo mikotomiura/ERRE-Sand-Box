@@ -56,19 +56,14 @@ func _resolve_router() -> Node:
 
 
 func _build_tree() -> void:
-	# Anchor the panel to the right edge, 420 px wide, full height. Padding
-	# inside is handled by margin containers so the labels wrap naturally.
-	anchor_left = 1.0
-	anchor_right = 1.0
-	anchor_top = 0.0
-	anchor_bottom = 1.0
-	offset_left = -420.0
-	offset_right = -10.0
-	offset_top = 10.0
-	offset_bottom = -10.0
+	# M6-B-2b: MainScene now hosts the panel inside an ``HBoxContainer`` split,
+	# so positioning is handled by the parent container. We only set the
+	# minimum width here to stay defensive when the scene is reused in a
+	# non-HBox context (e.g. the FixtureHarness or a future inspector mode).
+	custom_minimum_size = Vector2(320, 0)
 
 	var bg := ColorRect.new()
-	bg.color = Color(0.06, 0.07, 0.10, 0.85)
+	bg.color = Color(0.06, 0.07, 0.10, 1.0)
 	bg.anchor_right = 1.0
 	bg.anchor_bottom = 1.0
 	bg.mouse_filter = Control.MOUSE_FILTER_STOP

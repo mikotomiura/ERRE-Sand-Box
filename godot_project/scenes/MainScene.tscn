@@ -19,42 +19,66 @@ ambient_light_energy = 0.3
 [node name="MainScene" type="Node3D" unique_id=1404513804]
 script = ExtResource("1_worldmgr")
 
-[node name="Environment" type="WorldEnvironment" parent="." unique_id=189341109]
+[node name="UILayer" type="CanvasLayer" parent="." unique_id=920137691]
+
+[node name="Split" type="HBoxContainer" parent="UILayer"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 0
+
+[node name="WorldView" type="SubViewportContainer" parent="UILayer/Split"]
+stretch = true
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="WorldViewport" type="SubViewport" parent="UILayer/Split/WorldView"]
+handle_input_locally = true
+physics_object_picking = true
+
+[node name="Environment" type="WorldEnvironment" parent="UILayer/Split/WorldView/WorldViewport" unique_id=189341109]
 environment = SubResource("1_env")
 
-[node name="DirectionalLight3D" type="DirectionalLight3D" parent="Environment" unique_id=368995508]
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="UILayer/Split/WorldView/WorldViewport/Environment" unique_id=368995508]
 transform = Transform3D(1, 0, 0, 0, 0.7071, -0.7071, 0, 0.7071, 0.7071, 0, 10, 0)
 shadow_enabled = true
 
-[node name="CameraRig" type="Node3D" parent="." unique_id=1867495374]
+[node name="CameraRig" type="Node3D" parent="UILayer/Split/WorldView/WorldViewport" unique_id=1867495374]
 script = ExtResource("5_camerarig")
 
-[node name="Camera3D" type="Camera3D" parent="CameraRig"]
+[node name="Camera3D" type="Camera3D" parent="UILayer/Split/WorldView/WorldViewport/CameraRig"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 10, 20)
 current = true
 
-[node name="ZoneManager" type="Node3D" parent="." unique_id=981836740]
+[node name="ZoneManager" type="Node3D" parent="UILayer/Split/WorldView/WorldViewport" unique_id=981836740]
 
-[node name="BoundaryLayer" type="Node3D" parent="."]
+[node name="BoundaryLayer" type="Node3D" parent="UILayer/Split/WorldView/WorldViewport"]
 script = ExtResource("7_boundary")
 
-[node name="EnvelopeRouter" type="Node" parent="." unique_id=1792355104]
-script = ExtResource("3_envrouter")
-
-[node name="AgentManager" type="Node3D" parent="." unique_id=75119993]
+[node name="AgentManager" type="Node3D" parent="UILayer/Split/WorldView/WorldViewport" unique_id=75119993]
 script = ExtResource("4_agentmgr")
-router_path = NodePath("../EnvelopeRouter")
+router_path = NodePath("../../../../EnvelopeRouter")
 
-[node name="WebSocketClient" type="Node" parent="." unique_id=449818480]
-script = ExtResource("2_wsclient")
+[node name="SelectionManager" type="Node" parent="UILayer/Split/WorldView/WorldViewport"]
+script = ExtResource("8_selection")
+camera_rig_path = NodePath("../CameraRig")
 
-[node name="UILayer" type="CanvasLayer" parent="." unique_id=920137691]
+[node name="ReasoningPanel" type="Control" parent="UILayer/Split"]
+custom_minimum_size = Vector2(340, 0)
+layout_mode = 2
+size_flags_horizontal = 0
+size_flags_vertical = 3
+script = ExtResource("6_reasoningpanel")
+router_path = NodePath("../../../EnvelopeRouter")
 
 [node name="SpeechBubbleContainer" type="Control" parent="UILayer" unique_id=1787971483]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+mouse_filter = 2
 
 [node name="DebugOverlay" type="Label" parent="UILayer" unique_id=1203039555]
 offset_left = 10.0
@@ -63,15 +87,12 @@ offset_right = 600.0
 offset_bottom = 40.0
 text = "ERRE-Sandbox — M6 observatory (1/2/3 camera modes, WASD pan, drag to orbit)"
 
-[node name="ReasoningPanel" type="Control" parent="UILayer"]
-layout_mode = 3
-script = ExtResource("6_reasoningpanel")
-router_path = NodePath("../../EnvelopeRouter")
+[node name="EnvelopeRouter" type="Node" parent="." unique_id=1792355104]
+script = ExtResource("3_envrouter")
 
-[node name="SelectionManager" type="Node" parent="."]
-script = ExtResource("8_selection")
-camera_rig_path = NodePath("../CameraRig")
+[node name="WebSocketClient" type="Node" parent="." unique_id=449818480]
+script = ExtResource("2_wsclient")
 
-[connection signal="selected_agent_id" from="SelectionManager" to="UILayer/ReasoningPanel" method="set_focused_agent"]
+[connection signal="selected_agent_id" from="UILayer/Split/WorldView/WorldViewport/SelectionManager" to="UILayer/Split/ReasoningPanel" method="set_focused_agent"]
 
 [connection signal="envelope_received" from="WebSocketClient" to="EnvelopeRouter" method="on_envelope_received"]
