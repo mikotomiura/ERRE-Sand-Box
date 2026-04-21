@@ -28,8 +28,7 @@
     ├── db-dumps/
     │   └── semantic-memory-dump-20260421-141410.txt  # #7 semantic_memory + episodic_memory 集計
     └── recordings/
-        ├── godot-dialog-20260421-*.mp4            # #5 MacBook Godot bubble (TBD)
-        └── godot-mode-tint-20260421-*.mp4         # #6 MacBook Godot tint (TBD)
+        └── erre-sandbox_demo.v3.mp4               # #5 + #6 統合 live demo (22 MB, PR #71)
 ```
 
 ## 各項目への evidence マッピング
@@ -40,8 +39,8 @@
 | 2 | 3-agent walking | `logs/cognition-ticks-*.log` (86 chat + 100 embed call) | — |
 | 3 | ERRE mode FSM | `logs/erre-transitions-*.log` (32 lines, 3 agents) | `logs/sampling-trace-*.log` |
 | 4 | dialog_turn LLM | `logs/dialog-probe-*.log` (6 turns generated) | `json/dialog-probe-envelopes.json`, `logs/dialog-trace-*.log` (empty body + note documenting live auto-fire unroll) |
-| 5 | Godot dialog bubble | `recordings/godot-dialog-*.mp4` (TBD) | `logs/cognition-ticks-*.log` (WS 接続試行ログ) |
-| 6 | Godot ERRE tint | `recordings/godot-mode-tint-*.mp4` (TBD) | — |
+| 5 | Godot dialog bubble | `recordings/erre-sandbox_demo.v3.mp4` (統合 demo, 22 MB) | `logs/cognition-ticks-151923.log` (post-fix session) |
+| 6 | Godot ERRE tint | `recordings/erre-sandbox_demo.v3.mp4` (同上) | Addendum 1 §検証 (fix 後の接続安定性) |
 | 7 | Reflection 回帰 | `db-dumps/semantic-memory-dump-*.txt` | `logs/cognition-ticks-*.log` (22 Reflection trigger) |
 
 ## 再現手順
