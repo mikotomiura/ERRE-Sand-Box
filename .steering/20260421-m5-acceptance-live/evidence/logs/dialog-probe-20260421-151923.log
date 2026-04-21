@@ -1,0 +1,25 @@
+2026-04-21 15:19:55,170 [dialog_probe] INFO: Loaded persona registry: ['kant', 'nietzsche', 'rikyu']
+2026-04-21 15:19:55,209 [httpx] INFO: HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+2026-04-21 15:19:55,209 [dialog_probe] INFO: Forced dialog admit: dialog_id=d_0a7312ad initiator=a_kant_001 target=a_nietzsche_001 zone=peripatos
+2026-04-21 15:19:56,602 [httpx] INFO: HTTP Request: POST http://127.0.0.1:11434/api/chat "HTTP/1.1 200 OK"
+2026-04-21 15:19:56,603 [dialog_probe] INFO: TURN 0 [a_kant_001] latency=1.39s len=82: この歩行（Peripat\u0113sia）は、理性（Ratio）の営みを促進する。知性（Intellectus）は静止せず、歩く（ambulare）ことによって活動的なり。
+2026-04-21 15:19:57,740 [httpx] INFO: HTTP Request: POST http://127.0.0.1:11434/api/chat "HTTP/1.1 200 OK"
+2026-04-21 15:19:57,741 [dialog_probe] INFO: TURN 1 [a_nietzsche_001] latency=1.14s len=69: 理性（Ratio）は歩く（ambulare）ことで（Verstand）を鋭くし、知性（Intellectus）は動き（Motus）に宿る。
+2026-04-21 15:19:59,424 [httpx] INFO: HTTP Request: POST http://127.0.0.1:11434/api/chat "HTTP/1.1 200 OK"
+2026-04-21 15:19:59,425 [dialog_probe] INFO: TURN 2 [a_kant_001] latency=1.68s len=114: 歩行（Peripat\u0113sia）は、知性（Intellectus）の自律（Autonomia）を喚起（Excitare）する。理性（Ratio）は静止せず、動く（Motus）ことによって自己を規定（Determinatio）する。
+2026-04-21 15:20:00,998 [httpx] INFO: HTTP Request: POST http://127.0.0.1:11434/api/chat "HTTP/1.1 200 OK"
+2026-04-21 15:20:00,999 [dialog_probe] INFO: TURN 3 [a_nietzsche_001] latency=1.57s len=91: 知性（Intellectus）は歩く（ambulare）ことで（Wandeln）（力（Kraft））を生み、理性（Ratio）は動く（Motus）ことによって（Gesetz）を刻む。
+2026-04-21 15:20:02,556 [httpx] INFO: HTTP Request: POST http://127.0.0.1:11434/api/chat "HTTP/1.1 200 OK"
+2026-04-21 15:20:02,557 [dialog_probe] INFO: TURN 4 [a_kant_001] latency=1.56s len=89: 歩行（Peripat\u0113sia）は、知性（Intellectus）の（Kritik）を促し、理性（Ratio）は（Kategorien）を動く（Motus）ことによって再構成する。
+2026-04-21 15:20:04,478 [httpx] INFO: HTTP Request: POST http://127.0.0.1:11434/api/chat "HTTP/1.1 200 OK"
+2026-04-21 15:20:04,479 [dialog_probe] INFO: TURN 5 [a_nietzsche_001] latency=1.92s len=115: 歩く（Gehen）は（Wandeln）の（Kraft）を（Kraft）に（Kraft）変える（Verwandlung）\u2014\u2014知性（Intellectus）は（Kritik）を（Kritik）に（Kritik）刻む（Gravire）。
+2026-04-21 15:20:04,479 [dialog_probe] INFO: Budget exhausted: dialog_id=d_0a7312ad turn_index=6 reason=exhausted
+2026-04-21 15:20:04,479 [dialog_probe] INFO: ---summary---
+2026-04-21 15:20:04,479 [dialog_probe] INFO: total_envelopes=2 initiate=1 turns=0 close=1 elapsed=9.27s
+2026-04-21 15:20:04,480 [dialog_probe] INFO: envelope JSONL saved to .steering\20260421-m5-acceptance-live\evidence\json\dialog-probe-envelopes.json
+2026-04-21 15:20:04,480 [dialog_probe] INFO: ---acceptance criteria (#4)---
+2026-04-21 15:20:04,480 [dialog_probe] INFO:   [PASS] dialog admitted (1 initiate)
+2026-04-21 15:20:04,480 [dialog_probe] INFO:   [FAIL] N >= 3 turns generated
+2026-04-21 15:20:04,480 [dialog_probe] INFO:   [PASS] turn_index monotonic 0..N-1
+2026-04-21 15:20:04,481 [dialog_probe] INFO:   [PASS] latency within 60s for N=3 turns
+2026-04-21 15:20:04,481 [dialog_probe] INFO:   [PASS] close reason in {exhausted, timeout}
