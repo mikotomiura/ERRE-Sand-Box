@@ -22,8 +22,10 @@ from random import Random
 from typing import TYPE_CHECKING, Any
 
 from erre_sandbox.cognition import CognitionCycle
+from erre_sandbox.erre import SAMPLING_DELTA_BY_MODE
 from erre_sandbox.schemas import (
     ERREModeName,
+    SamplingDelta,
     Zone,
 )
 
@@ -257,3 +259,82 @@ async def test_cycle_erre_policy_receives_step_observations(
         await llm.close()
     assert len(policy.calls) == 1
     assert policy.calls[0]["observations"] == [perception_event]
+
+
+async def test_cycle_erre_policy_populates_sampling_overrides_from_table(
+    make_agent_state: Callable[..., Any],
+    make_persona_spec: Callable[..., Any],
+    make_chat_client: Callable[..., OllamaChatClient],
+    make_embedding_client: Callable[[], EmbeddingClient],
+    cognition_store: MemoryStore,
+    cognition_retriever: Retriever,
+    perception_event: PerceptionEvent,
+) -> None:
+    """FSM transition must also update sampling_overrides from the table.
+
+    Without this wiring the FSM flips ``erre.name`` but leaves the
+    ``SamplingDelta`` at its zero default, so ``compose_sampling`` keeps
+    returning the persona's base values and mode changes become a
+    no-op for LLM sampling — which defeats the whole M5
+    sampling-override-live milestone.
+    """
+    policy = _RecordingFakePolicy(next_mode_return=ERREModeName.CHASHITSU)
+    persona: PersonaSpec = make_persona_spec()
+    agent = make_agent_state()  # default ERREMode is DEEP_WORK with zero delta
+    assert agent.erre.sampling_overrides == SamplingDelta()  # sanity
+    embedding = make_embedding_client()
+    llm = make_chat_client()
+    try:
+        cycle = _build_cycle_with_policy(
+            retriever=cognition_retriever,
+            store=cognition_store,
+            embedding=embedding,
+            llm=llm,
+            erre_policy=policy,
+        )
+        result = await cycle.step(agent, persona, [perception_event])
+    finally:
+        await embedding.close()
+        await llm.close()
+    expected = SAMPLING_DELTA_BY_MODE[ERREModeName.CHASHITSU]
+    assert result.agent_state.erre.name == ERREModeName.CHASHITSU
+    assert result.agent_state.erre.sampling_overrides == expected
+    # Explicit drift check: the table must not have mutated to zero by
+    # accident (would make the above equality trivially true).
+    assert result.agent_state.erre.sampling_overrides != SamplingDelta()
+
+
+async def test_cycle_erre_policy_noop_preserves_sampling_overrides(
+    make_agent_state: Callable[..., Any],
+    make_persona_spec: Callable[..., Any],
+    make_chat_client: Callable[..., OllamaChatClient],
+    make_embedding_client: Callable[[], EmbeddingClient],
+    cognition_store: MemoryStore,
+    cognition_retriever: Retriever,
+    perception_event: PerceptionEvent,
+) -> None:
+    """The FSM's no-op paths must not touch sampling_overrides either.
+
+    Complement to ``_returning_current_is_treated_as_noop``: both the
+    ``None`` return and the ``candidate == current`` guard must leave
+    the full ERREMode instance (including ``sampling_overrides``)
+    byte-identical to the pre-step value.
+    """
+    policy = _RecordingFakePolicy(next_mode_return=None)
+    persona: PersonaSpec = make_persona_spec()
+    agent = make_agent_state()
+    embedding = make_embedding_client()
+    llm = make_chat_client()
+    try:
+        cycle = _build_cycle_with_policy(
+            retriever=cognition_retriever,
+            store=cognition_store,
+            embedding=embedding,
+            llm=llm,
+            erre_policy=policy,
+        )
+        result = await cycle.step(agent, persona, [perception_event])
+    finally:
+        await embedding.close()
+        await llm.close()
+    assert result.agent_state.erre.sampling_overrides == agent.erre.sampling_overrides

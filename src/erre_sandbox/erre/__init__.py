@@ -22,8 +22,10 @@ from erre_sandbox.erre.fsm import (
     ZONE_TO_DEFAULT_ERRE_MODE,
     DefaultERREModePolicy,
 )
+from erre_sandbox.erre.sampling_table import SAMPLING_DELTA_BY_MODE
 
 __all__ = [
+    "SAMPLING_DELTA_BY_MODE",
     "SHUHARI_TO_MODE",
     "ZONE_TO_DEFAULT_ERRE_MODE",
     "DefaultERREModePolicy",
