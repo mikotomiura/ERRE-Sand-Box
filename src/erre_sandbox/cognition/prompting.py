@@ -26,8 +26,12 @@ _COMMON_PREFIX: Final[str] = (
     "You are an autonomous agent living in ERRE-Sandbox, a 3D world with "
     "five zones (study / peripatos / chashitsu / agora / garden). Each tick "
     "represents ten seconds of wall-clock time. Respond in character, "
-    "following the cognitive habits of the persona described below. Keep "
-    "utterances under 80 Japanese characters (or 160 Latin characters)."
+    "following the cognitive habits of the persona described below. "
+    "The ``utterance`` field MUST be written in Japanese (日本語) so the "
+    "researcher observing the 3D scene can read it at a glance — "
+    "original-language key terms (Kant のドイツ語/ラテン語, Nietzsche の"
+    "ドイツ語など) may appear parenthetically inside the Japanese sentence. "
+    "Keep utterances under 80 Japanese characters."
 )
 
 RESPONSE_SCHEMA_HINT: Final[str] = (
