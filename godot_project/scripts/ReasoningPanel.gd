@@ -125,7 +125,11 @@ func _make_divider() -> HSeparator:
 # ---- Focus API ----
 
 
-func set_focused_agent(agent_id: String) -> void:
+func set_focused_agent(agent_id: String, _agent_node: Node3D = null) -> void:
+	# Second arg is ignored; accepting it lets the panel bind directly to
+	# SelectionManager.selected_agent_id(agent_id, agent_node) without an
+	# adapter node in MainScene. A future version can use the node to show
+	# per-agent persona colouring.
 	if agent_id == _focused_agent:
 		return
 	_focused_agent = agent_id

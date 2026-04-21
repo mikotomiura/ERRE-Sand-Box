@@ -7,6 +7,7 @@
 [ext_resource type="Script" path="res://scripts/CameraRig.gd" id="5_camerarig"]
 [ext_resource type="Script" path="res://scripts/ReasoningPanel.gd" id="6_reasoningpanel"]
 [ext_resource type="Script" path="res://scripts/BoundaryLayer.gd" id="7_boundary"]
+[ext_resource type="Script" path="res://scripts/SelectionManager.gd" id="8_selection"]
 
 [sub_resource type="Environment" id="1_env"]
 background_mode = 1
@@ -66,5 +67,11 @@ text = "ERRE-Sandbox — M6 observatory (1/2/3 camera modes, WASD pan, drag to o
 layout_mode = 3
 script = ExtResource("6_reasoningpanel")
 router_path = NodePath("../../EnvelopeRouter")
+
+[node name="SelectionManager" type="Node" parent="."]
+script = ExtResource("8_selection")
+camera_rig_path = NodePath("../CameraRig")
+
+[connection signal="selected_agent_id" from="SelectionManager" to="UILayer/ReasoningPanel" method="set_focused_agent"]
 
 [connection signal="envelope_received" from="WebSocketClient" to="EnvelopeRouter" method="on_envelope_received"]
