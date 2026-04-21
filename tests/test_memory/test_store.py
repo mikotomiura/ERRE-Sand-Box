@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -231,3 +232,39 @@ async def test_evict_episodic_before_returns_and_deletes(
 
 async def test_get_by_id_missing_returns_none(store: MemoryStore) -> None:
     assert await store.get_by_id("does-not-exist") is None
+
+
+# ---------------------------------------------------------------------------
+# Concurrent access regression (M6 live — 2026-04-22)
+# ---------------------------------------------------------------------------
+
+
+async def test_concurrent_add_does_not_raise_systemerror(
+    store: MemoryStore,
+    make_entry: Callable[..., MemoryEntry],
+    unit_embedding: list[float],
+) -> None:
+    """Cognition ticks fan out via asyncio.gather → asyncio.to_thread.
+
+    Before the M6 live verification patch, every sync DB method used the
+    shared ``sqlite3.Connection`` without holding a lock, so two concurrent
+    ``asyncio.to_thread(self._add_sync, ...)`` calls (3 agents per tick,
+    multiple observations each) raced at ``conn.__enter__`` and raised
+    ``SystemError: error return without exception set`` under Python 3.11
+    with ``sqlite3.threadsafety == 1``.
+
+    The regression guard launches 24 concurrent ``add`` calls (the count
+    seen in live logs: 3 agents × 8 cognition ticks) and asserts no
+    exception escapes. With the RLock in place every call returns the
+    ``entry.id`` and every row becomes retrievable.
+    """
+    entries = [make_entry(content=f"concurrent-{i}") for i in range(24)]
+    ids = await asyncio.gather(
+        *(store.add(e, embedding=unit_embedding) for e in entries),
+    )
+    assert ids == [e.id for e in entries]
+    # All rows landed — nothing was lost to a silent conn corruption.
+    for e in entries:
+        fetched = await store.get_by_id(e.id)
+        assert fetched is not None
+        assert fetched.content == e.content
