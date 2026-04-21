@@ -40,7 +40,7 @@ from pydantic import BaseModel, ConfigDict, Field
 # §1 Protocol constants
 # =============================================================================
 
-SCHEMA_VERSION: Final[str] = "0.3.0-m5"
+SCHEMA_VERSION: Final[str] = "0.4.0-m6"
 """Semantic version of the wire contract.
 
 Bumped whenever any on-wire model gains or loses a field, or a discriminator
@@ -59,21 +59,27 @@ LLM-generation milestone. Two new Protocols (:class:`ERREModeTransitionPolicy`,
 :class:`DialogTurnGenerator`) are frozen as interfaces so the four parallel
 sub-tasks can type-hint against them.
 
-Compatibility with M4 payloads:
+M6 bump (0.3.0-m5 → 0.4.0-m6): adds four new :class:`Observation` variants
+(:class:`AffordanceEvent`, :class:`ProximityEvent`, :class:`TemporalEvent`,
+:class:`BiorhythmEvent`) and the :class:`TimeOfDay` enum used by
+``TemporalEvent``. All four are additive to the discriminated ``Observation``
+union — M5 producers that only emit the original five variants remain
+wire-compatible. Firing logic lives in ``world/tick.py`` (Affordance /
+Proximity / Temporal) and ``cognition/cycle.py`` (Biorhythm) and is wired
+in the M6-A-2b sub-task; the schema bump is taken early so the four
+M6-A tracks can type-hint against the frozen contract.
 
-* Additive and wire-compatible: ``Cognitive.dialog_turn_budget`` (defaulted)
-  and the new ``"exhausted"`` literal on ``DialogCloseMsg.reason``.
-* **Breaking for dialog_turn producers**: :attr:`DialogTurnMsg.turn_index`
-  is required (``Field(...)``) with no default, so any M4 sender that emits
-  a ``dialog_turn`` envelope without ``turn_index`` will fail validation at
-  0.3.0-m5. This is deliberate — spike judgement 4 in
-  ``.steering/20260420-m5-llm-spike/decisions.md`` made per-turn ordering
-  load-bearing for the exhaustion close-out. The sole M4 producer
-  (``InMemoryDialogScheduler``) is upgraded in this same bump, and the
-  ``fixtures/control_envelope/dialog_turn.json`` fixture has been regenerated
-  to include ``turn_index=0``.
+Compatibility with M5 payloads:
 
-See ``.steering/20260420-m5-contracts-freeze/`` for the rationale.
+* Additive and wire-compatible for consumers: new ``event_type`` values
+  on the ``Observation`` discriminator do not break validation of old
+  payloads.
+* Producers that enumerate ``Observation`` exhaustively (e.g. pattern
+  matching with a ``case _:`` catch-all that raises) will see the new
+  variants fall through — review any such sites before deploying mixed
+  0.3.0-m5 / 0.4.0-m6 agents.
+
+See ``.steering/20260421-m6-observatory/`` for the rationale.
 """
 
 
@@ -116,6 +122,23 @@ class MemoryKind(StrEnum):
     SEMANTIC = "semantic"
     PROCEDURAL = "procedural"
     RELATIONAL = "relational"
+
+
+class TimeOfDay(StrEnum):
+    """Six simulated time-of-day periods used by :class:`TemporalEvent` (M6).
+
+    The world clock quantises wall-clock into these buckets so the FSM and
+    LLM can reason about circadian context without float comparisons. The
+    mapping from hour to period is owned by ``world/tick.py``; this enum
+    only freezes the vocabulary on the wire.
+    """
+
+    DAWN = "dawn"
+    MORNING = "morning"
+    NOON = "noon"
+    AFTERNOON = "afternoon"
+    DUSK = "dusk"
+    NIGHT = "night"
 
 
 class HabitFlag(StrEnum):
@@ -455,12 +478,92 @@ class InternalEvent(_ObservationBase):
     importance_hint: _Unit = 0.5
 
 
+class AffordanceEvent(_ObservationBase):
+    """The agent noticed an interactable environmental element (M6).
+
+    Emitted by ``world/tick.py`` when the agent enters the salient radius of
+    a named prop (e.g. a tea bowl within the chashitsu, a lectern in the
+    study). The open-vocabulary ``prop_kind`` keeps the wire contract stable
+    as new assets are added — downstream code should treat unknown kinds as
+    generic environmental salience rather than switching exhaustively.
+    """
+
+    event_type: Literal["affordance"] = "affordance"
+    prop_id: str = Field(..., description="Stable scene-level identifier.")
+    prop_kind: str = Field(
+        ...,
+        description=(
+            'Free-form kind label (e.g. "tea_bowl", "lectern", "stone_lantern"). '
+            "Downstream code should not switch exhaustively on this value."
+        ),
+    )
+    zone: Zone
+    distance: float = Field(
+        ...,
+        ge=0.0,
+        description="Distance in metres from the agent to the prop.",
+    )
+    salience: _Unit = 0.5
+
+
+class ProximityEvent(_ObservationBase):
+    """The agent's distance to another agent crossed a threshold (M6).
+
+    Emitted once per crossing edge — entering or leaving a radius — rather
+    than continuously, so the observation stream is not flooded by co-walking
+    pairs. ``distance_prev`` and ``distance_now`` both refer to the current
+    physics tick's pair distance and its immediately prior reading.
+    """
+
+    event_type: Literal["proximity"] = "proximity"
+    other_agent_id: str
+    distance_prev: float = Field(..., ge=0.0)
+    distance_now: float = Field(..., ge=0.0)
+    crossing: Literal["enter", "leave"]
+
+
+class TemporalEvent(_ObservationBase):
+    """The simulated time-of-day period rolled over (M6).
+
+    Rolled once per period boundary (e.g. ``morning`` → ``noon``). The FSM
+    may use this to bias dwell-time or trigger circadian-scheduled mode
+    shifts; the LLM prompt surfaces it so the agent can reason about the
+    phase of the day (e.g. Kant's regular afternoon walk).
+    """
+
+    event_type: Literal["temporal"] = "temporal"
+    period_prev: TimeOfDay
+    period_now: TimeOfDay
+
+
+class BiorhythmEvent(_ObservationBase):
+    """A fatigue / hunger / stress signal crossed a threshold (M6).
+
+    Emitted by ``cognition/cycle.py`` when the CSDG half-step physical /
+    cognitive update pushes one of the tracked signals across a policy
+    threshold. Unlike :class:`InternalEvent`, this variant is structured:
+    downstream code can switch on ``signal`` and ``threshold_crossed`` to
+    drive UI / FSM reactions without parsing the freeform ``content`` of
+    an ``InternalEvent``.
+    """
+
+    event_type: Literal["biorhythm"] = "biorhythm"
+    signal: Literal["fatigue", "hunger", "stress"]
+    level_prev: _Unit
+    level_now: _Unit
+    threshold_crossed: Literal["up", "down"]
+
+
 Observation: TypeAlias = Annotated[
     PerceptionEvent
     | SpeechEvent
     | ZoneTransitionEvent
     | ERREModeShiftEvent
-    | InternalEvent,
+    | InternalEvent
+    | AffordanceEvent
+    | ProximityEvent
+    | TemporalEvent
+    | BiorhythmEvent,
     Field(discriminator="event_type"),
 ]
 """Discriminated union of all observation event types."""
@@ -514,6 +617,41 @@ class ReflectionEvent(BaseModel):
     src_episodic_ids: list[str] = Field(
         default_factory=list,
         description="Source ``MemoryEntry.id`` values folded into the summary.",
+    )
+    created_at: datetime = Field(default_factory=_utc_now)
+
+
+class ReasoningTrace(BaseModel):
+    """One tick of structured reasoning rationale (M6-A-3).
+
+    Produced alongside an :class:`LLMPlan` by the cognition cycle's Step 5
+    when the LLM fills the optional ``salient`` / ``decision`` /
+    ``next_intent`` fields. Unlike :class:`ReflectionEvent` (which distils
+    many ticks into one stored memory), this trace captures per-tick
+    self-explanation — primarily for xAI observability in the Godot UI.
+
+    All three narrative fields are optional because stable Ollama output is
+    never 100%; downstream consumers must tolerate ``None``. The trace is
+    safe to discard if missing — :class:`LLMPlan` parsing is independent,
+    so a persona can produce a valid plan without producing a trace.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    agent_id: str
+    tick: int = Field(..., ge=0)
+    mode: ERREModeName
+    salient: str | None = Field(
+        default=None,
+        description="What the agent noticed as most salient this tick.",
+    )
+    decision: str | None = Field(
+        default=None,
+        description="The one-sentence rationale behind the chosen action.",
+    )
+    next_intent: str | None = Field(
+        default=None,
+        description="Forward-looking intent surfaced for upcoming ticks.",
     )
     created_at: datetime = Field(default_factory=_utc_now)
 
@@ -665,6 +803,42 @@ class DialogTurnMsg(_EnvelopeBase):
     )
 
 
+class ReasoningTraceMsg(_EnvelopeBase):
+    """The cognition cycle emitted structured reasoning for this agent (M6-A-3).
+
+    Carries a :class:`ReasoningTrace` over the wire to the Godot xAI
+    visualisation (``ReasoningPanel`` / ``SynapseGraph``). Independent of
+    :class:`AgentUpdateMsg` because the trace may be absent on any given
+    tick (the LLM is free to fill or omit the rationale fields); bundling
+    it into ``AgentUpdateMsg`` would force every tick to pay the schema
+    cost of always-optional fields.
+    """
+
+    kind: Literal["reasoning_trace"] = "reasoning_trace"
+    trace: ReasoningTrace
+
+
+class ReflectionEventMsg(_EnvelopeBase):
+    """A reflection distillation fired for this agent (M6-A-4).
+
+    :class:`ReflectionEvent` is an internal domain type that
+    :class:`~erre_sandbox.cognition.reflection.Reflector` has been producing
+    since M4, but it was never routed over the wire — Godot had no way to
+    show the researcher *"this is the summary the agent wrote of the last
+    few minutes"*. M6-A-4 wraps the same domain object in this envelope so
+    the xAI :class:`ReasoningPanel` can present it in a collapsible section
+    without Godot having to replicate the trigger / distillation policy.
+
+    The wrapped :class:`ReflectionEvent` is unchanged on the wire; existing
+    Python consumers that already handle the domain type do not need to
+    change. Only the envelope discriminator value ``reflection_event`` is
+    new (and covered by the ``SCHEMA_VERSION`` bump to 0.4.0-m6).
+    """
+
+    kind: Literal["reflection_event"] = "reflection_event"
+    event: ReflectionEvent
+
+
 class DialogCloseMsg(_EnvelopeBase):
     """A dialog has ended (M4 foundation).
 
@@ -691,7 +865,9 @@ ControlEnvelope: TypeAlias = Annotated[
     | ErrorMsg
     | DialogInitiateMsg
     | DialogTurnMsg
-    | DialogCloseMsg,
+    | DialogCloseMsg
+    | ReasoningTraceMsg
+    | ReflectionEventMsg,
     Field(discriminator="kind"),
 ]
 """Discriminated union of all WebSocket envelope kinds."""
@@ -835,11 +1011,13 @@ class DialogTurnGenerator(Protocol):
 
 __all__ = [
     "SCHEMA_VERSION",
+    "AffordanceEvent",
     "AgentSpec",
     "AgentState",
     "AgentUpdateMsg",
     "AgentView",
     "AnimationMsg",
+    "BiorhythmEvent",
     "Cognitive",
     "CognitiveHabit",
     "ControlEnvelope",
@@ -866,7 +1044,11 @@ __all__ = [
     "Physical",
     "PlutchikDimension",
     "Position",
+    "ProximityEvent",
+    "ReasoningTrace",
+    "ReasoningTraceMsg",
     "ReflectionEvent",
+    "ReflectionEventMsg",
     "RelationshipBond",
     "SamplingBase",
     "SamplingDelta",
@@ -874,6 +1056,8 @@ __all__ = [
     "ShuhariStage",
     "SpeechEvent",
     "SpeechMsg",
+    "TemporalEvent",
+    "TimeOfDay",
     "WorldTickMsg",
     "Zone",
     "ZoneTransitionEvent",

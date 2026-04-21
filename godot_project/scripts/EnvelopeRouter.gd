@@ -25,6 +25,8 @@ signal error_reported(code: String, detail: String)
 signal dialog_initiate_received(initiator_agent_id: String, target_agent_id: String, zone: String)
 signal dialog_turn_received(dialog_id: String, speaker_id: String, addressee_id: String, utterance: String)
 signal dialog_close_received(dialog_id: String, reason: String)
+signal reasoning_trace_received(agent_id: String, tick: int, trace: Dictionary)
+signal reflection_event_received(agent_id: String, tick: int, summary_text: String, event: Dictionary)
 
 
 func on_envelope_received(envelope: Dictionary) -> void:
@@ -84,6 +86,21 @@ func on_envelope_received(envelope: Dictionary) -> void:
 			dialog_close_received.emit(
 				envelope.get("dialog_id", ""),
 				envelope.get("reason", ""),
+			)
+		"reasoning_trace":
+			var trace: Dictionary = envelope.get("trace", {})
+			reasoning_trace_received.emit(
+				trace.get("agent_id", ""),
+				int(envelope.get("tick", 0)),
+				trace,
+			)
+		"reflection_event":
+			var event: Dictionary = envelope.get("event", {})
+			reflection_event_received.emit(
+				event.get("agent_id", ""),
+				int(envelope.get("tick", 0)),
+				event.get("summary_text", ""),
+				event,
 			)
 		_:
 			push_warning("[EnvelopeRouter] Unknown kind: %s" % kind)

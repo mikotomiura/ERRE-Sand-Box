@@ -94,6 +94,10 @@ _EXPECTED_KINDS: frozenset[str] = frozenset(
         "dialog_initiate",
         "dialog_turn",
         "dialog_close",
+        # M6-A-3 (ReasoningTrace pipeline for xAI observability)
+        "reasoning_trace",
+        # M6-A-4 (Reflection distillation routed over the wire)
+        "reflection_event",
     },
 )
 
