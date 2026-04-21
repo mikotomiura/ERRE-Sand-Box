@@ -17,14 +17,22 @@ import httpx
 import pytest
 
 from erre_sandbox.bootstrap import (
+    _ZERO_MODE_DELTAS,
     BootConfig,
     _build_initial_state,
+    _load_persona_registry,
     _load_persona_yaml,
     _supervise,
 )
 from erre_sandbox.inference import OllamaChatClient
 from erre_sandbox.inference.ollama_adapter import OllamaUnavailableError
-from erre_sandbox.schemas import AgentSpec, ERREModeName, PersonaSpec, Zone
+from erre_sandbox.schemas import (
+    AgentSpec,
+    ERREModeName,
+    PersonaSpec,
+    SamplingDelta,
+    Zone,
+)
 
 # ---------------------------------------------------------------------------
 # _load_persona_yaml
@@ -258,3 +266,59 @@ async def test_supervise_reraises_runtime_exception() -> None:
     # Even after exception, both shutdown signals must have fired.
     assert server.should_exit is True
     assert runtime.stop_called is True
+
+
+# ---------------------------------------------------------------------------
+# _load_persona_registry — M5 orchestrator-integration
+# ---------------------------------------------------------------------------
+
+
+def test_load_persona_registry_builds_dict_for_each_agent() -> None:
+    """Each unique persona_id in cfg.agents produces exactly one registry entry."""
+    cfg = BootConfig(
+        agents=(
+            AgentSpec(persona_id="kant", initial_zone=Zone.PERIPATOS),
+            AgentSpec(persona_id="nietzsche", initial_zone=Zone.PERIPATOS),
+            AgentSpec(persona_id="rikyu", initial_zone=Zone.CHASHITSU),
+        ),
+    )
+    registry = _load_persona_registry(cfg)
+    assert set(registry.keys()) == {"kant", "nietzsche", "rikyu"}
+    assert all(isinstance(p, PersonaSpec) for p in registry.values())
+    assert registry["kant"].persona_id == "kant"
+
+
+def test_load_persona_registry_deduplicates_repeated_persona_ids() -> None:
+    """Same persona_id registered twice results in a single registry entry."""
+    cfg = BootConfig(
+        agents=(
+            AgentSpec(persona_id="kant", initial_zone=Zone.PERIPATOS),
+            AgentSpec(persona_id="kant", initial_zone=Zone.STUDY),
+        ),
+    )
+    registry = _load_persona_registry(cfg)
+    assert list(registry.keys()) == ["kant"]
+
+
+# ---------------------------------------------------------------------------
+# _ZERO_MODE_DELTAS — drift guard for --disable-mode-sampling
+# ---------------------------------------------------------------------------
+
+
+def test_zero_mode_deltas_covers_all_erre_modes() -> None:
+    """Every ERREModeName must have an entry — otherwise a KeyError at runtime.
+
+    The production `SAMPLING_DELTA_BY_MODE` table is drift-checked elsewhere
+    (tests/test_erre/test_sampling_table.py). This guard applies the same
+    coverage requirement to the disable-path's zero table so that toggling
+    the rollback flag cannot turn a mode transition into a KeyError.
+    """
+    covered = set(_ZERO_MODE_DELTAS.keys())
+    assert covered == set(ERREModeName)
+
+
+def test_zero_mode_deltas_are_all_zero() -> None:
+    """Every entry is an empty :class:`SamplingDelta` — no override applied."""
+    empty = SamplingDelta()
+    for mode, delta in _ZERO_MODE_DELTAS.items():
+        assert delta == empty, f"mode {mode} should have zero delta"

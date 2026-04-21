@@ -25,9 +25,10 @@ import uvicorn
 import yaml
 
 from erre_sandbox.cognition import CognitionCycle
-from erre_sandbox.erre import ZONE_TO_DEFAULT_ERRE_MODE
+from erre_sandbox.erre import ZONE_TO_DEFAULT_ERRE_MODE, DefaultERREModePolicy
 from erre_sandbox.inference import OllamaChatClient
 from erre_sandbox.integration.dialog import InMemoryDialogScheduler
+from erre_sandbox.integration.dialog_turn import OllamaDialogTurnGenerator
 from erre_sandbox.integration.gateway import make_app
 from erre_sandbox.memory import EmbeddingClient, MemoryStore, Retriever
 from erre_sandbox.schemas import (
@@ -37,12 +38,13 @@ from erre_sandbox.schemas import (
     ERREModeName,
     PersonaSpec,
     Position,
+    SamplingDelta,
     Zone,
 )
 from erre_sandbox.world import WorldRuntime
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable
+    from collections.abc import Awaitable, Mapping
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +90,21 @@ _PERSONA_ID_RE: Final[re.Pattern[str]] = re.compile(r"\A[a-z][a-z0-9_-]{0,63}\Z"
 """Path-traversal guard for ``persona_id``; mirrors the CLI-side regex."""
 
 
+_ZERO_MODE_DELTAS: Final[Mapping[ERREModeName, SamplingDelta]] = {
+    mode: SamplingDelta() for mode in ERREModeName
+}
+"""Per-mode sampling delta table used when ``--disable-mode-sampling`` is set.
+
+The FSM still runs (so ``AgentState.erre.name`` transitions happen and live
+acceptance #3 can observe them) but every mode maps to an empty
+:class:`SamplingDelta`, so ``compose_sampling`` falls back to the persona's
+base values. Covers every :class:`~erre_sandbox.schemas.ERREModeName` so the
+``_maybe_apply_erre_fsm`` fail-fast lookup (see
+``.steering/20260421-m5-erre-sampling-override-live/decisions.md`` judgement
+1) stays KeyError-free on this rollback path.
+"""
+
+
 def _load_persona_yaml(personas_dir: Path, persona_id: str) -> PersonaSpec:
     """Load ``personas/<persona_id>.yaml`` into a :class:`PersonaSpec`.
 
@@ -117,6 +134,32 @@ def _load_persona_yaml(personas_dir: Path, persona_id: str) -> PersonaSpec:
         ) from exc
     data = yaml.safe_load(raw)
     return PersonaSpec.model_validate(data)
+
+
+def _load_persona_registry(cfg: BootConfig) -> dict[str, PersonaSpec]:
+    """Load every persona referenced by ``cfg.agents`` into a ``{id: spec}`` dict.
+
+    The dict is passed to :class:`OllamaDialogTurnGenerator` so the generator
+    can resolve the addressee's ``display_name`` when building prompts
+    (see ``.steering/20260421-m5-dialog-turn-generator/decisions.md`` §4).
+    Duplicate ``persona_id`` entries in ``cfg.agents`` collapse to a single
+    registry entry — the registry is keyed by id, not by agent instance.
+
+    The same YAML will be re-read in ``bootstrap()``'s agent registration
+    loop, but that is intentional: personas are tiny (<10 KB) and the two
+    reads live in different phases (bootstrap wiring vs. per-agent init).
+    The dedup happens here so the registration loop can stay a simple
+    ``for spec in cfg.agents`` without caring about duplicates.
+    """
+    registry: dict[str, PersonaSpec] = {}
+    for spec in cfg.agents:
+        if spec.persona_id in registry:
+            continue
+        registry[spec.persona_id] = _load_persona_yaml(
+            cfg.personas_dir,
+            spec.persona_id,
+        )
+    return registry
 
 
 def _build_initial_state(spec: AgentSpec, persona: PersonaSpec) -> AgentState:
@@ -151,7 +194,13 @@ def _build_initial_state(spec: AgentSpec, persona: PersonaSpec) -> AgentState:
     )
 
 
-async def bootstrap(cfg: BootConfig) -> None:
+async def bootstrap(
+    cfg: BootConfig,
+    *,
+    enable_erre_fsm: bool = True,
+    enable_dialog_turn: bool = True,
+    enable_mode_sampling: bool = True,
+) -> None:
     """Construct the full stack and supervise runtime + uvicorn.
 
     Resource lifecycle is structured via :class:`AsyncExitStack` so any
@@ -160,6 +209,24 @@ async def bootstrap(cfg: BootConfig) -> None:
     caught explicitly; without this the ``uvicorn.Server`` default handler
     intercepts Ctrl-C but the ``WorldRuntime`` task keeps running, which is
     the class of silent failure that T19 spent hours debugging.
+
+    The three ``enable_*`` keyword-only flags are **M5 rollback knobs**, not
+    permanent configuration (hence their absence from :class:`BootConfig`).
+    All default to ``True`` (= the full M5 wire). Flipping to ``False``
+    degrades one axis at a time back to M4 behaviour:
+
+    * ``enable_erre_fsm=False`` — the FSM is not wired into
+      :class:`CognitionCycle`, so ``AgentState.erre`` stays at its boot-time
+      zone default.
+    * ``enable_dialog_turn=False`` — no :class:`OllamaDialogTurnGenerator`
+      is attached. Dialogs still initiate and close via timeout, but no
+      utterances are generated (M4-equivalent transcripts).
+    * ``enable_mode_sampling=False`` — the FSM still runs, but the
+      per-mode sampling deltas are replaced by
+      :data:`_ZERO_MODE_DELTAS` so ``compose_sampling`` falls back to the
+      persona's base values.
+
+    Once :mod:`m5-acceptance-live` signs off, these flags will be removed.
     """
     logging.basicConfig(
         level=cfg.log_level.upper(),
@@ -193,11 +260,22 @@ async def bootstrap(cfg: BootConfig) -> None:
             await inference.health_check()
 
         retriever = Retriever(memory, embedding)
+        # ERRE mode FSM wiring (M5). Flipping ``enable_erre_fsm=False``
+        # hands CognitionCycle the pre-M5 ``erre_policy=None`` default so
+        # ``AgentState.erre`` stays at its boot-time zone-map value.
+        erre_policy = DefaultERREModePolicy() if enable_erre_fsm else None
+        # Mode-sampling override (M5). When ``enable_mode_sampling=False``
+        # the FSM still flips mode names but the per-mode delta is forced
+        # to zero — ``compose_sampling`` effectively behaves as if the
+        # mode never had overrides (rollback to persona base).
+        erre_sampling_deltas = None if enable_mode_sampling else _ZERO_MODE_DELTAS
         cycle = CognitionCycle(
             retriever=retriever,
             store=memory,
             embedding=embedding,
             llm=inference,
+            erre_policy=erre_policy,
+            erre_sampling_deltas=erre_sampling_deltas,
         )
         runtime = WorldRuntime(cycle=cycle)
         # The scheduler's envelope sink writes directly into the runtime's
@@ -205,6 +283,28 @@ async def bootstrap(cfg: BootConfig) -> None:
         # speech / move without a second delivery path (see design.md §v2).
         scheduler = InMemoryDialogScheduler(envelope_sink=runtime.inject_envelope)
         runtime.attach_dialog_scheduler(scheduler)
+
+        # Dialog turn generator wiring (M5). Built from the pre-loaded
+        # persona registry so the generator can resolve the addressee's
+        # display_name at prompt-build time. ``enable_dialog_turn=False``
+        # leaves the runtime's generator slot as None and dialogs degrade
+        # to M4 behaviour (admit + timeout close, no LLM turns).
+        if enable_dialog_turn:
+            persona_registry = _load_persona_registry(cfg)
+            dialog_generator = OllamaDialogTurnGenerator(
+                llm=inference,
+                personas=persona_registry,
+            )
+            runtime.attach_dialog_generator(dialog_generator)
+            logger.info(
+                "[bootstrap] dialog_turn wired (%d personas in registry)",
+                len(persona_registry),
+            )
+        else:
+            logger.info(
+                "[bootstrap] dialog_turn disabled (--disable-dialog-turn); "
+                "dialogs will close via timeout only",
+            )
 
         for spec in cfg.agents:
             persona = _load_persona_yaml(cfg.personas_dir, spec.persona_id)

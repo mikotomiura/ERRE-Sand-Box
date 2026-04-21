@@ -136,6 +136,18 @@
   - `CLI --personas kant,nietzsche,rikyu`: 各 persona の `preferred_zones[0]` を initial_zone に採用
   - `InMemoryDialogScheduler` (integration 層) を構築、`envelope_sink=runtime.inject_envelope` で配線
   - `WorldRuntime.attach_dialog_scheduler(scheduler)` で scheduler を runtime に bind
+  - **M5 orchestrator-integration** (`schema_version=0.3.0-m5`):
+    - `DefaultERREModePolicy()` を instantiate し `CognitionCycle(erre_policy=...)` に
+      渡すことで ERRE mode FSM を活性化 (`enable_erre_fsm=False` で rollback)
+    - `_load_persona_registry(cfg)` で `{persona_id: PersonaSpec}` を構築し、
+      `OllamaDialogTurnGenerator(llm, personas=registry)` に注入。
+      `WorldRuntime.attach_dialog_generator(generator)` で wire
+      (`enable_dialog_turn=False` で rollback)
+    - `_ZERO_MODE_DELTAS` は `CognitionCycle(erre_sampling_deltas=...)` への zero
+      table 注入で使用 (`enable_mode_sampling=False` で rollback、FSM 遷移は維持
+      しつつ delta 適用のみ停止)
+    - 3 flag は `BootConfig` ではなく `bootstrap()` keyword-only kwargs に置き、
+      "永続 config と過渡 rollback knob" を命名空間レベルで分離
 
 ### Viz (MacBook Air M4)
 - **責務**: 3D 描画、ダッシュボード
@@ -173,6 +185,14 @@
   - `tick(world_tick, agents: Sequence[AgentView])` が proximity-based auto-fire を駆動: 同 reflective zone (peripatos/chashitsu/agora/garden) に 2+ agent + cooldown 満了 + RNG < AUTO_FIRE_PROB_PER_TICK (0.25) で `schedule_initiate` を内部実行
   - `WorldRuntime._on_cognition_tick` 末尾で `_run_dialog_tick()` が scheduler に AgentView projection を渡して回す。RNG は inject 可能 (テストで固定)
   - `AgentView = NamedTuple(agent_id, zone, tick)` のみ渡すので scheduler は AgentRuntime の内部構造を知らない
+- **M5 dialog turn driver** (`world/tick.py::_drive_dialog_turns`, `m5-orchestrator-integration`):
+  - `WorldRuntime` が `_run_dialog_tick()` の直後に `await self._drive_dialog_turns(world_tick)` を呼ぶ (`enable_dialog_turn=True` 時のみ)
+  - `scheduler.iter_open_dialogs()` で open dialog を列挙 (Protocol に追加、orchestration 専用)。各 dialog ごとに:
+    1. `transcript = scheduler.transcript_of(did)` で `turn_index = len(transcript)` 導出
+    2. speaker alternation: `turn_index % 2 == 0` => initiator、else target
+    3. `turn_index >= speaker.cognitive.dialog_turn_budget` で `close_dialog(reason="exhausted")`
+    4. 以外なら `generator.generate_turn(...)` を `asyncio.gather(return_exceptions=True)` で並列実行
+    5. 返った `DialogTurnMsg` を `scheduler.record_turn + runtime.inject_envelope` で emit / `None` は timeout 経路に任せる
 
 ### M4 Foundation Primitives (`schema_version=0.2.0-m4`)
 - **`AgentSpec`** (schemas.py §3): bootstrap 時の minimal agent 宣言 (`persona_id` + `initial_zone`)。`BootConfig.agents: tuple[AgentSpec, ...]` で N 体起動に拡張する
@@ -184,14 +204,15 @@
 
 ### フロー 1: 通常の認知サイクル (10秒ごと)
 1. Simulation Layer がエージェントの現在位置・環境を観察データとして生成
-2. **ERRE mode FSM** (M5 `m5-world-zone-triggers`): `CognitionCycle` に注入された `ERREModeTransitionPolicy` が観察列を評価し、必要なら `AgentState.erre` を更新 (同 tick 内の sampling に反映)
+2. **ERRE mode FSM** (M5 `m5-world-zone-triggers`): `CognitionCycle` に注入された `ERREModeTransitionPolicy` が観察列を評価し、必要なら `AgentState.erre` を更新 (同 tick 内の sampling に反映)。`m5-orchestrator-integration` 以降、`DefaultERREModePolicy` が composition root で instantiate される (`--disable-erre-fsm` で `None` に戻せる)
 3. Memory Layer から関連記憶を検索 (per-agent top-8 + world top-3)
 4. Working Memory (LLM context) に system prompt + AgentState + 記憶 + 観察を注入
-5. Inference Layer が LLM 推論を実行 (更新後の ERRE モードに応じたサンプリング)
+5. Inference Layer が LLM 推論を実行 (更新後の ERRE モードに応じたサンプリング。`--disable-mode-sampling` 時は delta を zero table で上書きして persona base に戻す)
 6. 推論結果から行動・発話を抽出、AgentState を更新
 7. Memory Layer に新しい観察・重要度スコアを書き込み
 8. Gateway 経由で WebSocket にエージェント状態を送信
-9. MacBook 側の Godot が 3D シーンを更新
+9. `WorldRuntime._on_cognition_tick` 末尾で `_drive_dialog_turns` が open dialog を並列処理し、`DialogTurnMsg` を emit (M5 `m5-orchestrator-integration`)
+10. MacBook 側の Godot が 3D シーンを更新
 
 ### フロー 2: 反省 (Reflection)
 1. importance 合計 > 150、または peripatos/chashitsu 入室がトリガー
