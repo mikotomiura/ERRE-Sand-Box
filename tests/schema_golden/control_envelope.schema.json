@@ -32,7 +32,7 @@
           "type": "array"
         },
         "schema_version": {
-          "default": "0.3.0-m5",
+          "default": "0.4.0-m6",
           "title": "Schema Version",
           "type": "string"
         },
@@ -71,7 +71,7 @@
           "type": "string"
         },
         "schema_version": {
-          "default": "0.3.0-m5",
+          "default": "0.4.0-m6",
           "title": "Schema Version",
           "type": "string"
         },
@@ -117,7 +117,7 @@
           "type": "boolean"
         },
         "schema_version": {
-          "default": "0.3.0-m5",
+          "default": "0.4.0-m6",
           "title": "Schema Version",
           "type": "string"
         },
@@ -247,7 +247,7 @@
           "type": "string"
         },
         "schema_version": {
-          "default": "0.3.0-m5",
+          "default": "0.4.0-m6",
           "title": "Schema Version",
           "type": "string"
         },
@@ -285,7 +285,7 @@
           "type": "string"
         },
         "schema_version": {
-          "default": "0.3.0-m5",
+          "default": "0.4.0-m6",
           "title": "Schema Version",
           "type": "string"
         },
@@ -335,7 +335,7 @@
           "type": "string"
         },
         "schema_version": {
-          "default": "0.3.0-m5",
+          "default": "0.4.0-m6",
           "title": "Schema Version",
           "type": "string"
         },
@@ -450,7 +450,7 @@
           "type": "string"
         },
         "schema_version": {
-          "default": "0.3.0-m5",
+          "default": "0.4.0-m6",
           "title": "Schema Version",
           "type": "string"
         },
@@ -500,7 +500,7 @@
           "type": "string"
         },
         "schema_version": {
-          "default": "0.3.0-m5",
+          "default": "0.4.0-m6",
           "title": "Schema Version",
           "type": "string"
         },
@@ -537,7 +537,7 @@
           "type": "string"
         },
         "schema_version": {
-          "default": "0.3.0-m5",
+          "default": "0.4.0-m6",
           "title": "Schema Version",
           "type": "string"
         },
@@ -691,6 +691,187 @@
       "title": "Position",
       "type": "object"
     },
+    "ReasoningTrace": {
+      "additionalProperties": false,
+      "description": "One tick of structured reasoning rationale (M6-A-3).\n\nProduced alongside an :class:`LLMPlan` by the cognition cycle's Step 5\nwhen the LLM fills the optional ``salient`` / ``decision`` /\n``next_intent`` fields. Unlike :class:`ReflectionEvent` (which distils\nmany ticks into one stored memory), this trace captures per-tick\nself-explanation — primarily for xAI observability in the Godot UI.\n\nAll three narrative fields are optional because stable Ollama output is\nnever 100%; downstream consumers must tolerate ``None``. The trace is\nsafe to discard if missing — :class:`LLMPlan` parsing is independent,\nso a persona can produce a valid plan without producing a trace.",
+      "properties": {
+        "agent_id": {
+          "title": "Agent Id",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "decision": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The one-sentence rationale behind the chosen action.",
+          "title": "Decision"
+        },
+        "mode": {
+          "$ref": "#/$defs/ERREModeName"
+        },
+        "next_intent": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Forward-looking intent surfaced for upcoming ticks.",
+          "title": "Next Intent"
+        },
+        "salient": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What the agent noticed as most salient this tick.",
+          "title": "Salient"
+        },
+        "tick": {
+          "minimum": 0,
+          "title": "Tick",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "agent_id",
+        "tick",
+        "mode"
+      ],
+      "title": "ReasoningTrace",
+      "type": "object"
+    },
+    "ReasoningTraceMsg": {
+      "additionalProperties": false,
+      "description": "The cognition cycle emitted structured reasoning for this agent (M6-A-3).\n\nCarries a :class:`ReasoningTrace` over the wire to the Godot xAI\nvisualisation (``ReasoningPanel`` / ``SynapseGraph``). Independent of\n:class:`AgentUpdateMsg` because the trace may be absent on any given\ntick (the LLM is free to fill or omit the rationale fields); bundling\nit into ``AgentUpdateMsg`` would force every tick to pay the schema\ncost of always-optional fields.",
+      "properties": {
+        "kind": {
+          "const": "reasoning_trace",
+          "default": "reasoning_trace",
+          "title": "Kind",
+          "type": "string"
+        },
+        "schema_version": {
+          "default": "0.4.0-m6",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "sent_at": {
+          "format": "date-time",
+          "title": "Sent At",
+          "type": "string"
+        },
+        "tick": {
+          "minimum": 0,
+          "title": "Tick",
+          "type": "integer"
+        },
+        "trace": {
+          "$ref": "#/$defs/ReasoningTrace"
+        }
+      },
+      "required": [
+        "tick",
+        "trace"
+      ],
+      "title": "ReasoningTraceMsg",
+      "type": "object"
+    },
+    "ReflectionEvent": {
+      "additionalProperties": false,
+      "description": "Snapshot of one reflection step (M4 foundation).\n\nThe cognition cycle distils a window of recent episodic entries into a\nsingle summary at reflection-trigger time. This struct is the on-wire /\nin-process record of that event, independent of both the trigger policy\n(decided in ``m4-cognition-reflection``) and the semantic-memory storage\nbackend (decided in ``m4-memory-semantic-layer``).",
+      "properties": {
+        "agent_id": {
+          "title": "Agent Id",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "src_episodic_ids": {
+          "description": "Source ``MemoryEntry.id`` values folded into the summary.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Src Episodic Ids",
+          "type": "array"
+        },
+        "summary_text": {
+          "description": "LLM-distilled reflection content; UTF-8, not length-capped here.",
+          "title": "Summary Text",
+          "type": "string"
+        },
+        "tick": {
+          "minimum": 0,
+          "title": "Tick",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "agent_id",
+        "tick",
+        "summary_text"
+      ],
+      "title": "ReflectionEvent",
+      "type": "object"
+    },
+    "ReflectionEventMsg": {
+      "additionalProperties": false,
+      "description": "A reflection distillation fired for this agent (M6-A-4).\n\n:class:`ReflectionEvent` is an internal domain type that\n:class:`~erre_sandbox.cognition.reflection.Reflector` has been producing\nsince M4, but it was never routed over the wire — Godot had no way to\nshow the researcher *\"this is the summary the agent wrote of the last\nfew minutes\"*. M6-A-4 wraps the same domain object in this envelope so\nthe xAI :class:`ReasoningPanel` can present it in a collapsible section\nwithout Godot having to replicate the trigger / distillation policy.\n\nThe wrapped :class:`ReflectionEvent` is unchanged on the wire; existing\nPython consumers that already handle the domain type do not need to\nchange. Only the envelope discriminator value ``reflection_event`` is\nnew (and covered by the ``SCHEMA_VERSION`` bump to 0.4.0-m6).",
+      "properties": {
+        "event": {
+          "$ref": "#/$defs/ReflectionEvent"
+        },
+        "kind": {
+          "const": "reflection_event",
+          "default": "reflection_event",
+          "title": "Kind",
+          "type": "string"
+        },
+        "schema_version": {
+          "default": "0.4.0-m6",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "sent_at": {
+          "format": "date-time",
+          "title": "Sent At",
+          "type": "string"
+        },
+        "tick": {
+          "minimum": 0,
+          "title": "Tick",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "tick",
+        "event"
+      ],
+      "title": "ReflectionEventMsg",
+      "type": "object"
+    },
     "RelationshipBond": {
       "additionalProperties": false,
       "description": "Per-other-agent relational state.",
@@ -804,7 +985,7 @@
           "type": "string"
         },
         "schema_version": {
-          "default": "0.3.0-m5",
+          "default": "0.4.0-m6",
           "title": "Schema Version",
           "type": "string"
         },
@@ -851,7 +1032,7 @@
           "type": "string"
         },
         "schema_version": {
-          "default": "0.3.0-m5",
+          "default": "0.4.0-m6",
           "title": "Schema Version",
           "type": "string"
         },
@@ -901,6 +1082,8 @@
       "error": "#/$defs/ErrorMsg",
       "handshake": "#/$defs/HandshakeMsg",
       "move": "#/$defs/MoveMsg",
+      "reasoning_trace": "#/$defs/ReasoningTraceMsg",
+      "reflection_event": "#/$defs/ReflectionEventMsg",
       "speech": "#/$defs/SpeechMsg",
       "world_tick": "#/$defs/WorldTickMsg"
     },
@@ -936,6 +1119,12 @@
     },
     {
       "$ref": "#/$defs/DialogCloseMsg"
+    },
+    {
+      "$ref": "#/$defs/ReasoningTraceMsg"
+    },
+    {
+      "$ref": "#/$defs/ReflectionEventMsg"
     }
   ]
 }

@@ -1,13 +1,17 @@
-"""Contract tests frozen by ``m5-contracts-freeze`` (schema 0.3.0-m5).
+"""Contract tests frozen by ``m5-contracts-freeze`` (additive in M6+).
 
 Each ``test_*`` documents one concrete clause of the M5 wire contract:
 
-* ``SCHEMA_VERSION == "0.3.0-m5"``
 * ``Cognitive.dialog_turn_budget`` default = 6, ``ge=0``
 * ``DialogTurnMsg.turn_index`` required, ``ge=0``
 * ``DialogCloseMsg.reason`` literal includes ``"exhausted"``
 * ``ERREModeTransitionPolicy`` / ``DialogTurnGenerator`` Protocols are
   importable from ``erre_sandbox.schemas``
+
+The M5 ``SCHEMA_VERSION == "0.3.0-m5"`` pin has moved to
+``test_schemas.py::test_schema_version_is_current_milestone`` (tracks the
+active milestone) and ``test_schemas_m6`` (pins 0.4.0-m6). The M5 contract
+elements themselves remain valid because M6 is purely additive on top.
 
 Writing these tests **before** editing ``schemas.py`` was a deliberate
 choice of the v2 design (see
@@ -28,7 +32,6 @@ import pytest
 from pydantic import ValidationError
 
 from erre_sandbox.schemas import (
-    SCHEMA_VERSION,
     Cognitive,
     DialogCloseMsg,
     DialogTurnGenerator,
@@ -38,10 +41,11 @@ from erre_sandbox.schemas import (
 )
 
 # ---------- §1 SCHEMA_VERSION ------------------------------------------------
-
-
-def test_schema_version_is_m5() -> None:
-    assert SCHEMA_VERSION == "0.3.0-m5"
+# The M5 version pin (``SCHEMA_VERSION == "0.3.0-m5"``) moved to the current
+# milestone test in ``test_schemas.py`` and the M6 sibling ``test_schemas_m6``
+# when M6 bumped the wire version. The M5 contract elements below remain
+# asserted because they are *additive* — M5's dialog_turn_budget etc. are
+# still part of M6's on-wire contract.
 
 
 # ---------- §4 Cognitive.dialog_turn_budget ---------------------------------
