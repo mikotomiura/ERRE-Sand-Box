@@ -37,6 +37,7 @@ from erre_sandbox.cognition.state import (
     advance_physical,
     apply_llm_delta,
 )
+from erre_sandbox.erre import SAMPLING_DELTA_BY_MODE
 from erre_sandbox.inference import (
     ChatMessage,
     OllamaChatClient,
@@ -340,8 +341,10 @@ class CognitionCycle:
         keeps ``agent_state`` byte-identical. A concrete
         :class:`~erre_sandbox.schemas.ERREModeName` forces a fresh
         :class:`~erre_sandbox.schemas.ERREMode` with ``entered_at_tick``
-        set to the tick the FSM observed, which downstream consumers
-        (e.g. sampling override) use to detect a mode change.
+        set to the tick the FSM observed and ``sampling_overrides`` pulled
+        from :data:`~erre_sandbox.erre.SAMPLING_DELTA_BY_MODE` so Step 5's
+        LLM call in the same tick uses the freshly-selected mode's delta
+        via :func:`~erre_sandbox.inference.sampling.compose_sampling`.
 
         The FSM is consulted at Step 2.5, **before** ``new_physical`` is
         folded into ``agent_state``. Today ``advance_physical`` never
@@ -374,7 +377,11 @@ class CognitionCycle:
         )
         if candidate is None or candidate == agent_state.erre.name:
             return agent_state
-        new_erre = ERREMode(name=candidate, entered_at_tick=agent_state.tick)
+        new_erre = ERREMode(
+            name=candidate,
+            entered_at_tick=agent_state.tick,
+            sampling_overrides=SAMPLING_DELTA_BY_MODE[candidate],
+        )
         logger.debug(
             "ERRE mode transition for agent %s: %s → %s (tick=%d)",
             agent_state.agent_id,
