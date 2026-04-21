@@ -12,7 +12,7 @@ from erre_sandbox.cognition.prompting import (
     build_user_prompt,
     format_memories,
 )
-from erre_sandbox.schemas import MemoryEntry, MemoryKind, Zone
+from erre_sandbox.schemas import MemoryEntry, MemoryKind, ProximityEvent, Zone
 
 if TYPE_CHECKING:
     from erre_sandbox.schemas import AgentState, PersonaSpec
@@ -99,6 +99,62 @@ def test_build_user_prompt_respects_recent_limit(perception_event) -> None:
 def test_build_user_prompt_zone_transition_formatted(zone_entry_event) -> None:
     prompt = build_user_prompt([zone_entry_event], memories=[])
     assert "study -> peripatos" in prompt
+
+
+# ---------- M6-A-2b: window 5→10 default + proximity per-type clamp --------
+
+
+def test_build_user_prompt_default_window_is_ten(perception_event) -> None:
+    """The default window widened from 5 to 10 in M6-A-2b."""
+    many = [perception_event] * 15
+    prompt = build_user_prompt(many, memories=[])
+    assert prompt.count("[perception]") == 10
+
+
+def test_build_user_prompt_clamps_proximity_to_two_latest() -> None:
+    def _prox(i: int) -> ProximityEvent:
+        return ProximityEvent(
+            tick=i,
+            agent_id="a_kant_001",
+            other_agent_id=f"a_peer_{i:03d}",
+            distance_prev=7.0,
+            distance_now=3.0,
+            crossing="enter",
+        )
+
+    # Five proximity events, all inside the default window of 10.
+    observations = [_prox(i) for i in range(5)]
+    prompt = build_user_prompt(observations, memories=[])
+    # Only the two most recent should survive the clamp.
+    assert prompt.count("[proximity enter]") == 2
+    assert "a_peer_003" in prompt
+    assert "a_peer_004" in prompt
+    # The oldest three must be gone.
+    for i in range(3):
+        assert f"a_peer_{i:03d}" not in prompt
+
+
+def test_build_user_prompt_proximity_clamp_preserves_other_types(
+    perception_event,
+    zone_entry_event,
+) -> None:
+    """Clamping proximity must not drop non-proximity observations."""
+    prox = [
+        ProximityEvent(
+            tick=i,
+            agent_id="a_kant_001",
+            other_agent_id=f"a_peer_{i:03d}",
+            distance_prev=7.0,
+            distance_now=3.0,
+            crossing="enter",
+        )
+        for i in range(4)
+    ]
+    observations = [*prox, perception_event, zone_entry_event]
+    prompt = build_user_prompt(observations, memories=[])
+    assert prompt.count("[proximity enter]") == 2
+    assert "library shelves" in prompt  # perception preserved
+    assert "study -> peripatos" in prompt  # zone transition preserved
 
 
 def test_zone_value_exposed_in_system_prompt(

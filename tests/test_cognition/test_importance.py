@@ -6,11 +6,16 @@ import pytest
 
 from erre_sandbox.cognition.importance import estimate_importance
 from erre_sandbox.schemas import (
+    AffordanceEvent,
+    BiorhythmEvent,
     ERREModeName,
     ERREModeShiftEvent,
     InternalEvent,
     PerceptionEvent,
+    ProximityEvent,
     SpeechEvent,
+    TemporalEvent,
+    TimeOfDay,
     Zone,
     ZoneTransitionEvent,
 )
@@ -105,3 +110,53 @@ def test_clamped_to_unit() -> None:
     # base 0.6 + 0.3 = 0.9, still within [0,1]
     value = estimate_importance(obs)
     assert 0.0 <= value <= 1.0
+
+
+# ---------- M6-A-2b: new Observation variants (default handling) ----------
+
+
+def test_affordance_returns_base() -> None:
+    obs = AffordanceEvent(
+        tick=0,
+        agent_id="a",
+        prop_id="tea_bowl_01",
+        prop_kind="tea_bowl",
+        zone=Zone.CHASHITSU,
+        distance=0.8,
+        salience=0.9,
+    )
+    assert estimate_importance(obs) == pytest.approx(0.5)
+
+
+def test_proximity_returns_base() -> None:
+    obs = ProximityEvent(
+        tick=0,
+        agent_id="a",
+        other_agent_id="b",
+        distance_prev=7.0,
+        distance_now=3.0,
+        crossing="enter",
+    )
+    assert estimate_importance(obs) == pytest.approx(0.4)
+
+
+def test_temporal_returns_base() -> None:
+    obs = TemporalEvent(
+        tick=0,
+        agent_id="a",
+        period_prev=TimeOfDay.DAWN,
+        period_now=TimeOfDay.MORNING,
+    )
+    assert estimate_importance(obs) == pytest.approx(0.3)
+
+
+def test_biorhythm_returns_base() -> None:
+    obs = BiorhythmEvent(
+        tick=0,
+        agent_id="a",
+        signal="fatigue",
+        level_prev=0.4,
+        level_now=0.6,
+        threshold_crossed="up",
+    )
+    assert estimate_importance(obs) == pytest.approx(0.6)

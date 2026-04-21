@@ -14,9 +14,14 @@ from erre_sandbox.cognition.state import (
     apply_llm_delta,
 )
 from erre_sandbox.schemas import (
+    AffordanceEvent,
+    BiorhythmEvent,
     Cognitive,
     Physical,
+    ProximityEvent,
     SpeechEvent,
+    TemporalEvent,
+    TimeOfDay,
     Zone,
     ZoneTransitionEvent,
 )
@@ -117,3 +122,87 @@ def test_config_override_changes_behaviour() -> None:
     out_default = advance_physical(prev, events=[], rng=None)
     assert out_zero.mood_baseline == pytest.approx(0.5)
     assert out_default.mood_baseline < 0.5
+
+
+# ---------- M6-A-2b: default handling for new Observation variants ----------
+
+
+def test_advance_physical_salient_affordance_nudges_mood_up() -> None:
+    prev = Physical(mood_baseline=0.0)
+    salient = AffordanceEvent(
+        tick=0,
+        agent_id="a",
+        prop_id="tea_bowl_01",
+        prop_kind="tea_bowl",
+        zone=Zone.CHASHITSU,
+        distance=0.4,
+        salience=1.0,
+    )
+    out = advance_physical(prev, events=[salient], rng=None)
+    assert out.mood_baseline > 0.0
+
+
+def test_advance_physical_mundane_affordance_neutral() -> None:
+    prev = Physical(mood_baseline=0.0)
+    mundane = AffordanceEvent(
+        tick=0,
+        agent_id="a",
+        prop_id="cushion",
+        prop_kind="cushion",
+        zone=Zone.CHASHITSU,
+        distance=0.4,
+        salience=0.5,
+    )
+    out = advance_physical(prev, events=[mundane], rng=None)
+    # Pivoted around salience=0.5 so a neutral prop contributes exactly zero.
+    assert out.mood_baseline == pytest.approx(0.0)
+
+
+def test_advance_physical_proximity_enter_positive_leave_negative() -> None:
+    prev = Physical(mood_baseline=0.0)
+    enter = ProximityEvent(
+        tick=0,
+        agent_id="a",
+        other_agent_id="b",
+        distance_prev=7.0,
+        distance_now=3.0,
+        crossing="enter",
+    )
+    leave = enter.model_copy(
+        update={
+            "distance_prev": 3.0,
+            "distance_now": 7.0,
+            "crossing": "leave",
+        },
+    )
+    out_enter = advance_physical(prev, events=[enter], rng=None)
+    out_leave = advance_physical(prev, events=[leave], rng=None)
+    assert out_enter.mood_baseline > 0.0
+    assert out_leave.mood_baseline < 0.0
+
+
+def test_advance_physical_temporal_flat_positive() -> None:
+    prev = Physical(mood_baseline=0.0)
+    event = TemporalEvent(
+        tick=0,
+        agent_id="a",
+        period_prev=TimeOfDay.DAWN,
+        period_now=TimeOfDay.MORNING,
+    )
+    out = advance_physical(prev, events=[event], rng=None)
+    assert out.mood_baseline > 0.0
+
+
+def test_advance_physical_biorhythm_is_neutral() -> None:
+    """Biorhythm is a readout of Physical — feeding it back would double-count."""
+    prev = Physical(mood_baseline=0.0)
+    event = BiorhythmEvent(
+        tick=0,
+        agent_id="a",
+        signal="fatigue",
+        level_prev=0.4,
+        level_now=0.8,
+        threshold_crossed="up",
+    )
+    out = advance_physical(prev, events=[event], rng=None)
+    assert out.mood_baseline == pytest.approx(0.0)

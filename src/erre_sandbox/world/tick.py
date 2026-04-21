@@ -25,10 +25,12 @@ from __future__ import annotations
 import asyncio
 import heapq
 import logging
+import math
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, replace
-from typing import TYPE_CHECKING, ClassVar
+from itertools import combinations
+from typing import TYPE_CHECKING, ClassVar, Final, Literal
 
 from erre_sandbox.schemas import (
     AgentState,
@@ -40,6 +42,7 @@ from erre_sandbox.schemas import (
     MoveMsg,
     Observation,
     PersonaSpec,
+    ProximityEvent,
     TemporalEvent,
     TimeOfDay,
     WorldTickMsg,
@@ -75,6 +78,18 @@ _PERIOD_BOUNDARIES: tuple[tuple[float, TimeOfDay], ...] = (
     (0.80, TimeOfDay.DUSK),
     (0.90, TimeOfDay.NIGHT),
 )
+
+
+_PROXIMITY_THRESHOLD_M: Final[float] = 5.0
+"""Distance at which an agent pair is considered "proximate" (M6-A-2b).
+
+One :class:`ProximityEvent` is emitted per threshold crossing (``enter``
+when the distance falls below, ``leave`` when it rises back above) so
+co-walking agents do not spam the observation stream.  The value is
+deliberately larger than a conversational radius so the FSM can react
+**before** the dialog scheduler kicks in — five metres is the MASTER-PLAN
+reading of "same room but not yet engaged".
+"""
 
 
 def _time_of_day(elapsed: float, day_duration: float) -> TimeOfDay:
@@ -285,6 +300,14 @@ class WorldRuntime:
         # clock the constructor saw, which is usually still at t=0).
         self._time_start: float | None = None
         self._current_period: TimeOfDay = TimeOfDay.DAWN
+        # M6-A-2b: ProximityEvent needs a prev-tick distance per agent pair
+        # to detect threshold crossings. Key is ``frozenset({id_a, id_b})``
+        # so each unordered pair gets exactly one entry regardless of which
+        # side registered first. Stale entries (one side de-registered)
+        # remain until the pair is observed again and overwrites itself;
+        # WorldRuntime does not currently expose agent removal, so
+        # purge-on-deregister is left to the caller that adds that hook.
+        self._pair_distances: dict[frozenset[str], float] = {}
         self._agents: dict[str, AgentRuntime] = {}
         self._events: list[ScheduledEvent] = []
         # TODO(T14): the unbounded queue is a deliberate MVP trade-off
@@ -467,6 +490,73 @@ class WorldRuntime:
         # later their first tick sees elapsed near zero.
         if self._agents:
             self._fire_temporal_events()
+        # M6-A-2b: agent-pair proximity crossings. Requires at least two
+        # agents and the kinematic positions just advanced above, so this
+        # runs AFTER the move loop in the same tick. Single-agent worlds
+        # hot-path: no pairs, nothing to do.
+        if len(self._agents) >= 2:  # noqa: PLR2004 — "pair" is inherently 2
+            self._fire_proximity_events()
+
+    def _fire_proximity_events(self) -> None:
+        """Detect agent-pair distance crossings of :data:`_PROXIMITY_THRESHOLD_M`.
+
+        Distance is computed on the XZ plane to match
+        :mod:`erre_sandbox.world.physics` (the Y axis carries avatar height,
+        not a meaningful spatial separation). For each unordered pair:
+
+        * First-time observation → cache distance, no event.
+        * Crossed from ``>= threshold`` to ``< threshold`` → emit
+          ``crossing="enter"`` to both agents.
+        * Crossed from ``< threshold`` to ``>= threshold`` → emit
+          ``crossing="leave"`` to both agents.
+        * Stayed on the same side → cache update only, no event.
+
+        Both sides of a crossing see the same ``distance_prev`` /
+        ``distance_now`` values; only ``other_agent_id`` differs. This
+        matches the observation stream's perspective-per-agent semantics
+        (each agent gets its own view of what just happened to it).
+        """
+        for rt_a, rt_b in combinations(self._agents.values(), 2):
+            dx = rt_a.state.position.x - rt_b.state.position.x
+            dz = rt_a.state.position.z - rt_b.state.position.z
+            distance = math.hypot(dx, dz)
+            key = frozenset({rt_a.agent_id, rt_b.agent_id})
+            prev = self._pair_distances.get(key)
+            self._pair_distances[key] = distance
+            if prev is None:
+                # First observation: no prior tick to compare against.
+                continue
+            crossed_enter = (
+                prev >= _PROXIMITY_THRESHOLD_M and distance < _PROXIMITY_THRESHOLD_M
+            )
+            crossed_leave = (
+                prev < _PROXIMITY_THRESHOLD_M and distance >= _PROXIMITY_THRESHOLD_M
+            )
+            if not (crossed_enter or crossed_leave):
+                continue
+            crossing: Literal["enter", "leave"] = "enter" if crossed_enter else "leave"
+            tick_a = rt_a.state.tick
+            tick_b = rt_b.state.tick
+            rt_a.pending.append(
+                ProximityEvent(
+                    tick=tick_a,
+                    agent_id=rt_a.agent_id,
+                    other_agent_id=rt_b.agent_id,
+                    distance_prev=prev,
+                    distance_now=distance,
+                    crossing=crossing,
+                ),
+            )
+            rt_b.pending.append(
+                ProximityEvent(
+                    tick=tick_b,
+                    agent_id=rt_b.agent_id,
+                    other_agent_id=rt_a.agent_id,
+                    distance_prev=prev,
+                    distance_now=distance,
+                    crossing=crossing,
+                ),
+            )
 
     def _fire_temporal_events(self) -> None:
         """Detect and emit TimeOfDay boundary crossings for all agents."""
@@ -735,6 +825,12 @@ class WorldRuntime:
             return
         rt.state = res.agent_state
         rt.kinematics.position = res.agent_state.position
+        # M6-A-2b: observations detected post-LLM (stress crossings) are
+        # surfaced one tick late — append them to ``pending`` so the next
+        # cognition tick sees the signal. Empty for agents whose stress
+        # stayed on one side of the mid-band, which is the common case.
+        if res.follow_up_observations:
+            rt.pending.extend(res.follow_up_observations)
         for env in res.envelopes:
             if isinstance(env, MoveMsg):
                 # Resolve a "zone-only" MoveMsg (coords unchanged from current

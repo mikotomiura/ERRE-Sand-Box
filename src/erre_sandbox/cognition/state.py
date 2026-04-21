@@ -42,12 +42,27 @@ _SIGNED_MAX: Final[float] = 1.0
 # Event-impact lookups. Keys are ``Observation.event_type`` literals.
 # ``speech`` impact is ``|emotional_impact|`` taken from the event itself
 # (see ``_event_impact``), so the lookup value is the scaling weight only.
+#
+# M6-A-2b additions (affordance / proximity / temporal / biorhythm):
+# * affordance — positive scaled by salience (high-salience props pull the
+#   agent's mood baseline up when noticed)
+# * proximity — sign flips with ``crossing`` (enter → mild positive pull,
+#   leave → mild negative)
+# * temporal — flat tiny positive (a new time-of-day bucket is a fresh
+#   stimulus; the FSM rather than mood is the primary consumer)
+# * biorhythm — 0.0: the event is itself a readout of ``Physical``, feeding
+#   it back would double-count. Present in the dict for discover-by-grep
+#   completeness, not for numeric use.
 _PHYSICAL_EVENT_IMPACT: Final[dict[str, float]] = {
     "perception": 0.0,
     "speech": 0.05,
     "zone_transition": 0.02,
     "erre_mode_shift": 0.03,
     "internal": 0.01,
+    "affordance": 0.02,
+    "proximity": 0.02,
+    "temporal": 0.01,
+    "biorhythm": 0.0,
 }
 
 
@@ -92,7 +107,7 @@ def _noise(rng: Random | None, scale: float) -> float:
     return rng.gauss(0.0, scale)
 
 
-def _event_impact(event: Observation) -> float:
+def _event_impact(event: Observation) -> float:  # noqa: PLR0911 — discriminator dispatch
     """Signed impact of *event* on physical/mood baselines.
 
     Positive values nudge mood / energy up, negative down. Kept tiny so a
@@ -110,6 +125,21 @@ def _event_impact(event: Observation) -> float:
         # importance_hint ∈ [0, 1] — pivot around 0.5 so low-importance
         # internal nudges slightly negative, high-importance slightly positive.
         return _PHYSICAL_EVENT_IMPACT["internal"] * (event.importance_hint - 0.5) * 2.0
+    if event.event_type == "affordance":
+        # salience ∈ [0, 1] — pivot around 0.5 so a mundane prop is neutral
+        # and a highly salient one nudges mood upward (curiosity pull).
+        return _PHYSICAL_EVENT_IMPACT["affordance"] * (event.salience - 0.5) * 2.0
+    if event.event_type == "proximity":
+        # Entering a peer's radius is a mild positive social pull; leaving
+        # subtracts the same amount. Direction: "enter" → +, "leave" → −.
+        sign = 1.0 if event.crossing == "enter" else -1.0
+        return _PHYSICAL_EVENT_IMPACT["proximity"] * sign
+    if event.event_type == "temporal":
+        # Flat positive: a fresh time-of-day bucket is a weak arousal bump.
+        # The FSM, not mood, is the primary consumer of TemporalEvent.
+        return _PHYSICAL_EVENT_IMPACT["temporal"]
+    # BiorhythmEvent deliberately returns 0.0 to avoid feeding ``Physical``
+    # back into itself — it is a readout of the same vector being updated.
     return 0.0
 
 

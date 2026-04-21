@@ -33,10 +33,10 @@
   - stress は Cognitive (post-LLM) のため M6-A-2c へ繰越
   - `tests/test_cognition/test_biorhythm_events.py` (新規) — 8 tests (helper parametrize / 両 signal / 閾値以下/以上 / cycle 統合 prompt 検証)
 - [ ] (繰越) `world/tick.py:_on_physics_tick` に Affordance 近接判定 (radius 2m / prop location registry) — prop system 不在のため M7
-- [ ] (繰越) `world/tick.py:_on_physics_tick` に Proximity 判定 (agent-pair 距離 5m crossing, runtime-level prev-state)
-- [ ] (繰越) `cognition/prompting.py build_user_prompt` の窓を 5→10, per-type limit 導入
-- [ ] (繰越) stress 用 BiorhythmEvent (cognition/cycle.py Step 8 で new_cognitive 差分)
-- [ ] (繰越) `cognition/state.py` / `importance.py` に 4 新型の default handling 追加
+- [x] `world/tick.py:_on_physics_tick` に Proximity 判定 (agent-pair 距離 5m crossing, runtime-level prev-state) — 2026-04-22 `.steering/20260422-m6-observatory-carryover/` で着地
+- [x] `cognition/prompting.py build_user_prompt` の窓を 5→10, per-type limit 導入 (ProximityEvent max 2) — 2026-04-22 carryover
+- [x] stress 用 BiorhythmEvent (cognition/cycle.py Step 8 で new_cognitive 差分) — 2026-04-22 carryover, `CycleResult.follow_up_observations` 経路で次 tick に surface
+- [x] `cognition/state.py` / `importance.py` に 4 新型の default handling 追加 — 2026-04-22 carryover
 
 ### A-3 ReasoningTrace ✅ 2026-04-21
 - [x] `schemas.py §6` に `ReasoningTrace(agent_id, tick, mode, salient, decision, next_intent, created_at)` 追加
