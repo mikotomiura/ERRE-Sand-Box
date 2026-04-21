@@ -295,3 +295,49 @@ def test_tick_respects_cooldown_after_auto_close() -> None:
     # though the RNG would otherwise admit.
     scheduler.tick(InMemoryDialogScheduler.TIMEOUT_TICKS + 2, views_same_zone)
     assert len(captured) == initial_envelopes  # no new initiate/close
+
+
+# ---------------------------------------------------------------------------
+# iter_open_dialogs — orchestrator-integration enumerator (M5)
+# ---------------------------------------------------------------------------
+
+
+def test_iter_open_dialogs_returns_empty_when_no_open() -> None:
+    _captured, sink = _collector()
+    scheduler = InMemoryDialogScheduler(envelope_sink=sink)
+    assert list(scheduler.iter_open_dialogs()) == []
+
+
+def test_iter_open_dialogs_yields_dialog_id_pair_and_zone() -> None:
+    _captured, sink = _collector()
+    scheduler = InMemoryDialogScheduler(envelope_sink=sink)
+    scheduler.schedule_initiate("a", "b", Zone.PERIPATOS, tick=0)
+    entries = list(scheduler.iter_open_dialogs())
+    assert len(entries) == 1
+    did, init, target, zone = entries[0]
+    assert init == "a"
+    assert target == "b"
+    assert zone is Zone.PERIPATOS
+    # The dialog_id must match scheduler.get_dialog_id for the same pair.
+    assert scheduler.get_dialog_id("a", "b") == did
+
+
+def test_iter_open_dialogs_enumerates_multiple_dialogs() -> None:
+    _captured, sink = _collector()
+    scheduler = InMemoryDialogScheduler(envelope_sink=sink)
+    scheduler.schedule_initiate("a", "b", Zone.PERIPATOS, tick=0)
+    scheduler.schedule_initiate("c", "d", Zone.CHASHITSU, tick=0)
+    entries = list(scheduler.iter_open_dialogs())
+    assert len(entries) == 2
+    pairs = {(init, target) for _did, init, target, _zone in entries}
+    assert pairs == {("a", "b"), ("c", "d")}
+
+
+def test_iter_open_dialogs_drops_closed_dialogs() -> None:
+    _captured, sink = _collector()
+    scheduler = InMemoryDialogScheduler(envelope_sink=sink)
+    scheduler.schedule_initiate("a", "b", Zone.PERIPATOS, tick=0)
+    did = scheduler.get_dialog_id("a", "b")
+    assert did is not None
+    scheduler.close_dialog(did, reason="completed")
+    assert list(scheduler.iter_open_dialogs()) == []

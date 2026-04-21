@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from erre_sandbox import __main__ as main_mod
 from erre_sandbox.__main__ import _build_parser, _resolve_agents
 from erre_sandbox.schemas import AgentSpec, Zone
 
@@ -87,3 +88,113 @@ def test_parser_personas_dir_override(tmp_path: Path) -> None:
     target = str(tmp_path / "custom-personas")
     args = _build_parser().parse_args(["--personas-dir", target])
     assert args.personas_dir == target
+
+
+# ---------------------------------------------------------------------------
+# M5 rollback flags — --disable-erre-fsm / --disable-dialog-turn /
+# --disable-mode-sampling. All three default to "enabled" (True); passing
+# --disable-* flips the corresponding ``enable_*`` argparse field to False.
+# ---------------------------------------------------------------------------
+
+
+def test_parser_m5_rollback_flags_default_to_enabled() -> None:
+    args = _build_parser().parse_args([])
+    assert args.enable_erre_fsm is True
+    assert args.enable_dialog_turn is True
+    assert args.enable_mode_sampling is True
+
+
+def test_parser_disable_erre_fsm_flips_only_fsm_flag() -> None:
+    args = _build_parser().parse_args(["--disable-erre-fsm"])
+    assert args.enable_erre_fsm is False
+    assert args.enable_dialog_turn is True
+    assert args.enable_mode_sampling is True
+
+
+def test_parser_disable_dialog_turn_flips_only_dialog_flag() -> None:
+    args = _build_parser().parse_args(["--disable-dialog-turn"])
+    assert args.enable_erre_fsm is True
+    assert args.enable_dialog_turn is False
+    assert args.enable_mode_sampling is True
+
+
+def test_parser_disable_mode_sampling_flips_only_sampling_flag() -> None:
+    args = _build_parser().parse_args(["--disable-mode-sampling"])
+    assert args.enable_erre_fsm is True
+    assert args.enable_dialog_turn is True
+    assert args.enable_mode_sampling is False
+
+
+def test_parser_all_three_disable_flags_combine() -> None:
+    args = _build_parser().parse_args(
+        ["--disable-erre-fsm", "--disable-dialog-turn", "--disable-mode-sampling"],
+    )
+    assert args.enable_erre_fsm is False
+    assert args.enable_dialog_turn is False
+    assert args.enable_mode_sampling is False
+
+
+# ---------------------------------------------------------------------------
+# cli() flag propagation smoke — verifies the argparse → bootstrap() kwargs
+# wiring so a missed keyword does not silently downgrade to defaults.
+# ---------------------------------------------------------------------------
+
+
+def test_cli_propagates_rollback_flags_to_bootstrap(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``cli()`` must pass the three rollback flags into ``bootstrap()``.
+
+    This catches the silent-no-op class of bugs flagged by the
+    impact-analyzer: if ``cli`` forgets to forward a flag, the argparse
+    test above still passes but the runtime falls back to defaults
+    (all-enabled) and the flag has no effect.
+    """
+    captured: dict[str, object] = {}
+
+    async def _recording_bootstrap(
+        cfg: object,
+        *,
+        enable_erre_fsm: bool,
+        enable_dialog_turn: bool,
+        enable_mode_sampling: bool,
+    ) -> None:
+        captured["cfg"] = cfg
+        captured["enable_erre_fsm"] = enable_erre_fsm
+        captured["enable_dialog_turn"] = enable_dialog_turn
+        captured["enable_mode_sampling"] = enable_mode_sampling
+
+    monkeypatch.setattr(main_mod, "bootstrap", _recording_bootstrap)
+
+    exit_code = main_mod.cli(
+        ["--disable-erre-fsm", "--disable-mode-sampling", "--skip-health-check"],
+    )
+    assert exit_code == 0
+    assert captured["enable_erre_fsm"] is False
+    assert captured["enable_dialog_turn"] is True  # not disabled
+    assert captured["enable_mode_sampling"] is False
+
+
+def test_cli_defaults_all_rollback_flags_to_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    async def _recording_bootstrap(
+        cfg: object,
+        *,
+        enable_erre_fsm: bool,
+        enable_dialog_turn: bool,
+        enable_mode_sampling: bool,
+    ) -> None:
+        captured["enable_erre_fsm"] = enable_erre_fsm
+        captured["enable_dialog_turn"] = enable_dialog_turn
+        captured["enable_mode_sampling"] = enable_mode_sampling
+        _ = cfg
+
+    monkeypatch.setattr(main_mod, "bootstrap", _recording_bootstrap)
+
+    assert main_mod.cli(["--skip-health-check"]) == 0
+    assert captured["enable_erre_fsm"] is True
+    assert captured["enable_dialog_turn"] is True
+    assert captured["enable_mode_sampling"] is True

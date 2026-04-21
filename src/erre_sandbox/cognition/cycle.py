@@ -62,12 +62,17 @@ from erre_sandbox.schemas import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Iterable, Mapping, Sequence
     from random import Random
 
     from erre_sandbox.cognition.parse import LLMPlan
     from erre_sandbox.memory import MemoryStore, RankedMemory, Retriever
-    from erre_sandbox.schemas import Observation, PersonaSpec
+    from erre_sandbox.schemas import (
+        ERREModeName,
+        Observation,
+        PersonaSpec,
+        SamplingDelta,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -135,6 +140,7 @@ class CognitionCycle:
         update_config: StateUpdateConfig | None = None,
         reflector: Reflector | None = None,
         erre_policy: ERREModeTransitionPolicy | None = None,
+        erre_sampling_deltas: Mapping[ERREModeName, SamplingDelta] | None = None,
     ) -> None:
         self._retriever = retriever
         self._store = store
@@ -157,6 +163,19 @@ class CognitionCycle:
         # concrete :class:`~erre_sandbox.erre.DefaultERREModePolicy` is the
         # responsibility of ``m5-orchestrator-integration``.
         self._erre_policy = erre_policy
+        # Override the per-mode sampling delta table. Defaults to the
+        # production :data:`SAMPLING_DELTA_BY_MODE`. A zero-delta table is
+        # injected by :func:`~erre_sandbox.bootstrap.bootstrap` when the
+        # ``--disable-mode-sampling`` rollback flag is active: the FSM still
+        # runs (mode-name transitions are observable) but the delta lookup
+        # yields empty overrides so ``compose_sampling`` falls back to the
+        # persona's base sampling. ``is not None`` rather than ``or`` so an
+        # explicitly-empty mapping does not silently fall back to production.
+        self._erre_sampling_deltas = (
+            erre_sampling_deltas
+            if erre_sampling_deltas is not None
+            else SAMPLING_DELTA_BY_MODE
+        )
 
     async def step(
         self,
@@ -380,7 +399,7 @@ class CognitionCycle:
         new_erre = ERREMode(
             name=candidate,
             entered_at_tick=agent_state.tick,
-            sampling_overrides=SAMPLING_DELTA_BY_MODE[candidate],
+            sampling_overrides=self._erre_sampling_deltas[candidate],
         )
         logger.debug(
             "ERRE mode transition for agent %s: %s → %s (tick=%d)",

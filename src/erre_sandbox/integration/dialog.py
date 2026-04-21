@@ -242,6 +242,18 @@ class InMemoryDialogScheduler:
         dialog = self._open.get(dialog_id)
         return list(dialog.turns) if dialog is not None else []
 
+    def iter_open_dialogs(self) -> Iterator[tuple[str, str, str, Zone]]:
+        """Yield ``(dialog_id, initiator_id, target_id, zone)`` for each open dialog.
+
+        Added for ``m5-orchestrator-integration``: the per-tick turn driver in
+        :class:`~erre_sandbox.world.tick.WorldRuntime` needs to enumerate every
+        open dialog to decide budget / speaker / turn generation. Read-only
+        — callers must not mutate the scheduler's state via the yielded ids
+        except through the existing ``record_turn`` / ``close_dialog`` surface.
+        """
+        for did, dialog in self._open.items():
+            yield did, dialog.initiator, dialog.target, dialog.zone
+
     # ------------------------------------------------------------------
     # Internals
     # ------------------------------------------------------------------

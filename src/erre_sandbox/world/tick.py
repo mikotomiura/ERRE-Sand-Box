@@ -35,17 +35,20 @@ from erre_sandbox.schemas import (
     AgentView,
     ControlEnvelope,
     DialogScheduler,
+    DialogTurnGenerator,
+    DialogTurnMsg,
     MoveMsg,
     Observation,
     PersonaSpec,
     WorldTickMsg,
+    Zone,
     ZoneTransitionEvent,
 )
 from erre_sandbox.world.physics import Kinematics, apply_move_command, step_kinematics
 from erre_sandbox.world.zones import default_spawn, locate_zone
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable, Sequence
+    from collections.abc import Awaitable, Callable, Coroutine, Sequence
 
     from erre_sandbox.cognition import CognitionCycle, CycleResult
 
@@ -166,6 +169,21 @@ class AgentRuntime:
     pending: list[Observation] = field(default_factory=list)
 
 
+@dataclass(slots=True)
+class _PendingTurn:
+    """One in-flight turn request staged by :meth:`WorldRuntime._drive_dialog_turns`.
+
+    Staging the coroutine with its metadata lets the gather loop correlate
+    each result with the dialog/speaker it belongs to for post-processing.
+    """
+
+    dialog_id: str
+    speaker_id: str
+    addressee_id: str
+    turn_index: int
+    coro: Coroutine[object, object, DialogTurnMsg | None]
+
+
 # =============================================================================
 # WorldRuntime
 # =============================================================================
@@ -214,6 +232,12 @@ class WorldRuntime:
         # policy so a stalled client cannot grow memory without bound.
         self._envelopes: asyncio.Queue[ControlEnvelope] = asyncio.Queue()
         self._dialog_scheduler: DialogScheduler | None = None
+        # M5 orchestrator-integration: optional LLM-backed generator consulted
+        # at the end of each cognition tick via ``_drive_dialog_turns``. When
+        # ``None`` (M4 behaviour and ``--disable-dialog-turn`` rollback), open
+        # dialogs are still admitted / timed out by the scheduler but no
+        # utterances are generated — they close via the existing timeout path.
+        self._dialog_generator: DialogTurnGenerator | None = None
         self._running: bool = False
         self._seq: int = 0
 
@@ -281,6 +305,22 @@ class WorldRuntime:
         which is awkward to arrange before the runtime exists.
         """
         self._dialog_scheduler = scheduler
+
+    def attach_dialog_generator(self, generator: DialogTurnGenerator) -> None:
+        """Install the LLM-backed :class:`DialogTurnGenerator` (M5).
+
+        When attached, :meth:`_on_cognition_tick` walks every open dialog
+        after the scheduler's proximity-auto-fire / timeout-close pass and
+        either (a) closes the dialog with ``reason="exhausted"`` if the
+        speaker's ``dialog_turn_budget`` is saturated, or (b) asks the
+        generator for the next utterance and records/emits the resulting
+        :class:`DialogTurnMsg`. ``None`` from the generator leaves the
+        dialog untouched for the existing timeout path to reap.
+
+        Last-writer-wins: re-attaching replaces the previously attached
+        generator, mirroring :meth:`attach_dialog_scheduler`.
+        """
+        self._dialog_generator = generator
 
     # ----- Lifecycle -----
 
@@ -374,6 +414,8 @@ class WorldRuntime:
         for rt, res in zip(runtimes, results, strict=True):
             self._consume_result(rt, res)
         self._run_dialog_tick()
+        if self._dialog_generator is not None and self._dialog_scheduler is not None:
+            await self._drive_dialog_turns(self._current_world_tick())
 
     def _run_dialog_tick(self) -> None:
         """Evaluate the dialog scheduler after all per-agent cognition ran.
@@ -395,15 +437,22 @@ class WorldRuntime:
         tick_fn = getattr(self._dialog_scheduler, "tick", None)
         if tick_fn is None:
             return
-        current_world_tick = max(
-            (rt.state.tick for rt in self._agents.values()),
-            default=0,
-        )
         try:
-            tick_fn(current_world_tick, views)
+            tick_fn(self._current_world_tick(), views)
         except Exception:
             # A misbehaving scheduler must not crash the cognition loop.
             logger.exception("dialog scheduler tick raised")
+
+    def _current_world_tick(self) -> int:
+        """Return the highest per-agent tick, or 0 when no agents are registered.
+
+        Shared by ``_run_dialog_tick``, ``_drive_dialog_turns``, and
+        ``_on_heartbeat_tick`` so the three consumers of "current world
+        tick" always see the same value. Cheap enough to recompute each
+        call (M4 target N ≤ 10 agents); if agent counts grow we could
+        cache and invalidate inside ``_consume_result``.
+        """
+        return max((rt.state.tick for rt in self._agents.values()), default=0)
 
     def _agent_views(self) -> Sequence[AgentView]:
         return [
@@ -415,14 +464,149 @@ class WorldRuntime:
             for rt in self._agents.values()
         ]
 
-    async def _on_heartbeat_tick(self) -> None:
-        current_tick = max(
-            (rt.state.tick for rt in self._agents.values()),
-            default=0,
+    async def _drive_dialog_turns(self, world_tick: int) -> None:
+        """Walk every open dialog and either generate a turn or close at budget.
+
+        Called only when both :attr:`_dialog_scheduler` and
+        :attr:`_dialog_generator` are set. For each open dialog the method
+        consults :meth:`InMemoryDialogScheduler.iter_open_dialogs` and:
+
+        1. Picks the next speaker by strict alternation:
+           ``turn_index % 2 == 0`` => initiator, else target. Derived from
+           ``len(transcript)`` rather than a tracked counter so the scheduler
+           remains the single source of truth.
+        2. Closes the dialog with ``reason="exhausted"`` when
+           ``len(transcript) >= speaker.cognitive.dialog_turn_budget``.
+        3. Otherwise dispatches the generator concurrently via
+           :func:`asyncio.gather` with ``return_exceptions=True`` so one
+           misbehaving pair cannot cancel the siblings. ``None`` return is a
+           soft close — the existing timeout path will reap it later. An
+           exception logs at ``WARNING`` and leaves the dialog untouched.
+        4. On a fresh ``DialogTurnMsg`` it calls
+           :meth:`InMemoryDialogScheduler.record_turn` (updates transcript and
+           ``last_activity_tick``) and :meth:`inject_envelope` (fan-out to
+           the WebSocket consumers). Scheduler ``record_turn`` does not emit
+           on its own, so the explicit inject here is load-bearing.
+
+        If a referenced speaker agent is not registered with this runtime
+        the dialog is skipped and a warning logged — it means the runtime
+        and scheduler have drifted, which is a bug in higher-layer wiring.
+        """
+        scheduler = self._dialog_scheduler
+        generator = self._dialog_generator
+        if scheduler is None or generator is None:
+            return
+        open_dialogs: list[tuple[str, str, str, Zone]] = list(
+            scheduler.iter_open_dialogs(),
         )
+        if not open_dialogs:
+            return
+
+        pending = self._stage_dialog_turns(
+            scheduler=scheduler,
+            generator=generator,
+            open_dialogs=open_dialogs,
+            world_tick=world_tick,
+        )
+        if not pending:
+            return
+        results = await asyncio.gather(
+            *(p.coro for p in pending),
+            return_exceptions=True,
+        )
+        for p, res in zip(pending, results, strict=True):
+            if isinstance(res, BaseException):
+                logger.warning(
+                    "dialog turn generation failed for dialog %s speaker %s: %s",
+                    p.dialog_id,
+                    p.speaker_id,
+                    res,
+                )
+                continue
+            if res is None:
+                # Soft close — leave for timeout reaper.
+                continue
+            if not isinstance(res, DialogTurnMsg):
+                logger.warning(
+                    "dialog turn generator returned unexpected type %s "
+                    "for dialog %s — dropping",
+                    type(res).__name__,
+                    p.dialog_id,
+                )
+                continue
+            try:
+                scheduler.record_turn(res)
+            except KeyError:
+                # Dialog closed mid-gather (timeout / exhausted / external).
+                logger.debug(
+                    "dialog %s closed before turn %d could be recorded",
+                    p.dialog_id,
+                    p.turn_index,
+                )
+                continue
+            self.inject_envelope(res)
+
+    def _stage_dialog_turns(
+        self,
+        *,
+        scheduler: DialogScheduler,
+        generator: DialogTurnGenerator,
+        open_dialogs: Sequence[tuple[str, str, str, Zone]],
+        world_tick: int,
+    ) -> list[_PendingTurn]:
+        """Decide per-dialog what to do this tick: close, skip, or enqueue.
+
+        Synchronous because every decision (budget / unknown agent / close)
+        is local state. Returned pending turns are staged coroutines that
+        :meth:`_drive_dialog_turns` then runs under ``asyncio.gather``.
+        """
+        pending: list[_PendingTurn] = []
+        for did, init_id, target_id, _zone in open_dialogs:
+            transcript = scheduler.transcript_of(did)
+            turn_index = len(transcript)
+            speaker_id = init_id if turn_index % 2 == 0 else target_id
+            addressee_id = target_id if speaker_id == init_id else init_id
+            speaker_rt = self._agents.get(speaker_id)
+            addressee_rt = self._agents.get(addressee_id)
+            if speaker_rt is None or addressee_rt is None:
+                logger.warning(
+                    "dialog %s references unregistered agent(s) "
+                    "speaker=%s addressee=%s — skipping",
+                    did,
+                    speaker_id,
+                    addressee_id,
+                )
+                continue
+            budget = speaker_rt.state.cognitive.dialog_turn_budget
+            if turn_index >= budget:
+                try:
+                    scheduler.close_dialog(did, reason="exhausted")
+                except KeyError:
+                    # Racy concurrent close (timeout already ran) — ignore.
+                    logger.debug("dialog %s already closed before exhaust", did)
+                continue
+            pending.append(
+                _PendingTurn(
+                    dialog_id=did,
+                    speaker_id=speaker_id,
+                    addressee_id=addressee_id,
+                    turn_index=turn_index,
+                    coro=generator.generate_turn(
+                        dialog_id=did,
+                        speaker_state=speaker_rt.state,
+                        speaker_persona=speaker_rt.persona,
+                        addressee_state=addressee_rt.state,
+                        transcript=transcript,
+                        world_tick=world_tick,
+                    ),
+                ),
+            )
+        return pending
+
+    async def _on_heartbeat_tick(self) -> None:
         await self._envelopes.put(
             WorldTickMsg(
-                tick=current_tick,
+                tick=self._current_world_tick(),
                 active_agents=len(self._agents),
             ),
         )

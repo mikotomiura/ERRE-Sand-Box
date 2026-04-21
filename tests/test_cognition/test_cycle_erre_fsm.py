@@ -338,3 +338,90 @@ async def test_cycle_erre_policy_noop_preserves_sampling_overrides(
         await embedding.close()
         await llm.close()
     assert result.agent_state.erre.sampling_overrides == agent.erre.sampling_overrides
+
+
+# ---------------------------------------------------------------------------
+# erre_sampling_deltas DI slot — `--disable-mode-sampling` rollback (M5)
+# ---------------------------------------------------------------------------
+
+
+async def test_cycle_erre_sampling_deltas_zero_table_keeps_overrides_empty(
+    make_agent_state: Callable[..., Any],
+    make_persona_spec: Callable[..., Any],
+    make_chat_client: Callable[..., OllamaChatClient],
+    make_embedding_client: Callable[[], EmbeddingClient],
+    cognition_store: MemoryStore,
+    cognition_retriever: Retriever,
+    perception_event: PerceptionEvent,
+) -> None:
+    """Zero-delta injected table => FSM name flips but sampling_overrides stay empty.
+
+    Models the ``--disable-mode-sampling`` rollback knob: the FSM is still
+    consulted (so mode name transitions are recorded and live acceptance #3's
+    `AgentState.erre.name` observation works) but the delta lookup hits the
+    zero table so `compose_sampling` sees no overrides and the LLM call uses
+    the persona's base sampling only.
+    """
+    zero_table = {mode: SamplingDelta() for mode in ERREModeName}
+    policy = _RecordingFakePolicy(next_mode_return=ERREModeName.CHASHITSU)
+    persona: PersonaSpec = make_persona_spec()
+    agent = make_agent_state()
+    assert agent.erre.name == ERREModeName.DEEP_WORK  # sanity
+    embedding = make_embedding_client()
+    llm = make_chat_client()
+    try:
+        cycle = CognitionCycle(
+            retriever=cognition_retriever,
+            store=cognition_store,
+            embedding=embedding,
+            llm=llm,
+            rng=Random(0),
+            erre_policy=policy,
+            erre_sampling_deltas=zero_table,
+        )
+        result = await cycle.step(agent, persona, [perception_event])
+    finally:
+        await embedding.close()
+        await llm.close()
+    # FSM transition name change DID happen.
+    assert result.agent_state.erre.name == ERREModeName.CHASHITSU
+    # But sampling_overrides stayed at the zero default because our
+    # injected table has SamplingDelta() for every mode.
+    assert result.agent_state.erre.sampling_overrides == SamplingDelta()
+    # Drift guard: the production table would have produced a non-zero delta.
+    assert SAMPLING_DELTA_BY_MODE[ERREModeName.CHASHITSU] != SamplingDelta()
+
+
+async def test_cycle_erre_sampling_deltas_default_uses_production_table(
+    make_agent_state: Callable[..., Any],
+    make_persona_spec: Callable[..., Any],
+    make_chat_client: Callable[..., OllamaChatClient],
+    make_embedding_client: Callable[[], EmbeddingClient],
+    cognition_store: MemoryStore,
+    cognition_retriever: Retriever,
+    perception_event: PerceptionEvent,
+) -> None:
+    """`erre_sampling_deltas=None` default preserves production behaviour."""
+    policy = _RecordingFakePolicy(next_mode_return=ERREModeName.CHASHITSU)
+    persona: PersonaSpec = make_persona_spec()
+    agent = make_agent_state()
+    embedding = make_embedding_client()
+    llm = make_chat_client()
+    try:
+        cycle = CognitionCycle(
+            retriever=cognition_retriever,
+            store=cognition_store,
+            embedding=embedding,
+            llm=llm,
+            rng=Random(0),
+            erre_policy=policy,
+            erre_sampling_deltas=None,
+        )
+        result = await cycle.step(agent, persona, [perception_event])
+    finally:
+        await embedding.close()
+        await llm.close()
+    assert (
+        result.agent_state.erre.sampling_overrides
+        == SAMPLING_DELTA_BY_MODE[ERREModeName.CHASHITSU]
+    )

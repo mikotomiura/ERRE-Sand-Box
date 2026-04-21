@@ -66,10 +66,10 @@
 ## 完了処理
 
 - [x] 全 steering ファイルの最終化
-- [ ] `git commit` (Conventional Commits:
+- [x] `git commit` (Conventional Commits:
       `feat(cognition): wire ERREModeTransitionPolicy into cognition cycle step`)
-- [ ] `git push -u origin feature/m5-world-zone-triggers`
-- [ ] PR 作成 → review → merge
+- [x] `git push -u origin feature/m5-world-zone-triggers`
+- [x] PR 作成 → review → merge (PR #58 merge 済、`m5-orchestrator-integration` task 冒頭 chore で整合)
 
 ## 制約・リマインダ
 

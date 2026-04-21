@@ -27,6 +27,7 @@ This module MUST NOT import any other ``erre_sandbox.*`` module
 from __future__ import annotations
 
 from collections.abc import (
+    Iterator,  # noqa: TC003 — resolved at runtime by get_type_hints in tests
     Sequence,  # noqa: TC003 — resolved at runtime by get_type_hints in tests
 )
 from datetime import UTC, datetime
@@ -738,6 +739,31 @@ class DialogScheduler(Protocol):
         reason: Literal["completed", "interrupted", "timeout", "exhausted"],
     ) -> DialogCloseMsg:
         """Close an open dialog and emit the close envelope."""
+        ...
+
+    def transcript_of(self, dialog_id: str) -> list[DialogTurnMsg]:
+        """Return the accumulated transcript of ``dialog_id``.
+
+        Added for M5 ``m5-orchestrator-integration``: the tick-level turn
+        driver in :class:`~erre_sandbox.world.tick.WorldRuntime` reads the
+        transcript length to derive ``turn_index`` and alternate the
+        speaker. Returns an empty list for unknown / closed dialogs so
+        callers can iterate without guarding on membership. The
+        interface-only addition does **not** bump the wire contract
+        (``SCHEMA_VERSION``): no on-wire field gained/lost.
+        """
+        ...
+
+    def iter_open_dialogs(self) -> Iterator[tuple[str, str, str, Zone]]:
+        """Yield ``(dialog_id, initiator_id, target_id, zone)`` for each open dialog.
+
+        Added for M5 ``m5-orchestrator-integration`` alongside
+        :meth:`transcript_of`. Lets the runtime's turn driver enumerate
+        live dialogs without querying ``(a, b) → dialog_id`` for every
+        registered pair. Implementations must not expose closed dialogs.
+        Read-only: callers must mutate state only through
+        :meth:`record_turn` / :meth:`close_dialog`.
+        """
         ...
 
 
