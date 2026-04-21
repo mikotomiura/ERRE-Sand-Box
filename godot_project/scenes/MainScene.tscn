@@ -4,6 +4,9 @@
 [ext_resource type="Script" uid="uid://dpheq7xqjwu3e" path="res://scripts/WebSocketClient.gd" id="2_wsclient"]
 [ext_resource type="Script" uid="uid://dsf5wl0i3oxte" path="res://scripts/EnvelopeRouter.gd" id="3_envrouter"]
 [ext_resource type="Script" uid="uid://cva8rjrmmattq" path="res://scripts/AgentManager.gd" id="4_agentmgr"]
+[ext_resource type="Script" path="res://scripts/CameraRig.gd" id="5_camerarig"]
+[ext_resource type="Script" path="res://scripts/ReasoningPanel.gd" id="6_reasoningpanel"]
+[ext_resource type="Script" path="res://scripts/BoundaryLayer.gd" id="7_boundary"]
 
 [sub_resource type="Environment" id="1_env"]
 background_mode = 1
@@ -22,11 +25,17 @@ environment = SubResource("1_env")
 transform = Transform3D(1, 0, 0, 0, 0.7071, -0.7071, 0, 0.7071, 0.7071, 0, 10, 0)
 shadow_enabled = true
 
-[node name="Camera3D" type="Camera3D" parent="." unique_id=1867495374]
+[node name="CameraRig" type="Node3D" parent="." unique_id=1867495374]
+script = ExtResource("5_camerarig")
+
+[node name="Camera3D" type="Camera3D" parent="CameraRig"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 10, 20)
 current = true
 
 [node name="ZoneManager" type="Node3D" parent="." unique_id=981836740]
+
+[node name="BoundaryLayer" type="Node3D" parent="."]
+script = ExtResource("7_boundary")
 
 [node name="EnvelopeRouter" type="Node" parent="." unique_id=1792355104]
 script = ExtResource("3_envrouter")
@@ -51,6 +60,11 @@ offset_left = 10.0
 offset_top = 10.0
 offset_right = 600.0
 offset_bottom = 40.0
-text = "ERRE-Sandbox -- T16 wired"
+text = "ERRE-Sandbox — M6 observatory (1/2/3 camera modes, WASD pan, drag to orbit)"
+
+[node name="ReasoningPanel" type="Control" parent="UILayer"]
+layout_mode = 3
+script = ExtResource("6_reasoningpanel")
+router_path = NodePath("../../EnvelopeRouter")
 
 [connection signal="envelope_received" from="WebSocketClient" to="EnvelopeRouter" method="on_envelope_received"]
