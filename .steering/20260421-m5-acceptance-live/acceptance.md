@@ -26,19 +26,22 @@
 | 2 | 3-agent walking 60s+ | 各 agent の cognition tick が走る | **✅ PASS** | `evidence/logs/cognition-ticks-*.log` | 7 分間で 86 LLM chat + 100 embed 呼び出し (= 28+ tick × 3 agent 相当) / 22 Reflection trigger / FSM 32 回遷移 |
 | 3 | ERRE mode FSM | zone 遷移で mode name 更新 + sampling 反映 | **✅ PASS** | `evidence/logs/erre-transitions-*.log`, `evidence/logs/sampling-trace-*.log` | 32 ERRE mode transition (3 agent × 8+ tick)。kant/nietzsche/rikyu 全員が peripatetic ↔ deep_work/chashitsu を往復 |
 | 4 | dialog_turn LLM 生成 | N≥3 turn が 60s 内 + turn_index 単調 + close reason ∈ {timeout, exhausted} | **✅ PASS** | `evidence/logs/dialog-probe-*.log`, `evidence/json/dialog-probe-envelopes.json` | 6 turns generated in 2.91s (Δ=0.4-0.6s/turn) / turn_index 0-5 strict monotonic / close reason=exhausted。Live run では auto-fire RNG が 7 分内で admit ロールしなかったため、deterministic probe (`dialog_probe.py`) で LLM turn パイプラインを裏取り |
-| 5 | Godot dialog bubble | `dialog_turn_received` で avatar bubble 表示、30Hz | **⏳ TBD (MacBook)** | `evidence/recordings/godot-dialog-*.mp4` (未配置) | MacBook side: user は live run 中に Godot 接続試行を観測 (192.168.3.118 から WS handshake 272 回記録)。録画は次セッションで回収 |
-| 6 | Godot ERRE mode tint | mode 切替時に material 色変化が目視可能 | **⏳ TBD (MacBook)** | `evidence/recordings/godot-mode-tint-*.mp4` (未配置) | MacBook side、上記と同条件 |
+| 5 | Godot dialog bubble | `dialog_turn_received` で avatar bubble 表示、30Hz | **✅ PASS** | `evidence/recordings/erre-sandbox_demo.v3.mp4` (22 MB, 統合 demo) | PR #71 で MacBook 収録 demo を追加。PR #65 schema bump + PR #66 humanoid avatar + PR #68 日本語発話すべて merge 後の live 挙動を 3 体で確認。bubble は Label3D + billboard で読めるサイズ、PR #66 の font_size=48 / outline_size=16 強化で視認性高 |
+| 6 | Godot ERRE mode tint | mode 切替時に material 色変化が目視可能 | **✅ PASS** | `evidence/recordings/erre-sandbox_demo.v3.mp4` (同上、統合 demo 内で tint 変化を収録) | avatar material の tint shift (peripatos=淡黄 / chashitsu=淡緑 / study=白 等) が録画内で観察可能。BodyTinter の共有 material tween が全身一括で色を変える設計 (PR #66) |
 | 7 | Reflection 回帰なし | M4 の reflection + semantic_memory が継続 | **✅ PASS** | `evidence/db-dumps/semantic-memory-dump-*.txt` | kant=6 / nietzsche=6 / rikyu=12 row、全て `origin_reflection_id` 非 NULL。episodic_memory kant=12 / nietzsche=12 / rikyu=13 row |
 
 ## 総括
 
-**G-GEAR 側 5 項目 (#1, #2, #3, #4, #7) すべて PASS**。M5 の本番 wire (FSM + sampling delta + dialog turn generator + orchestrator integration) が実機 LLM 経路で意図通り動作していることを確認した。
+**7 項目すべて PASS**。M5 Phase 2 の本番 wire (FSM + sampling delta + dialog turn generator + orchestrator integration + Godot visuals) が実機 LLM 経路 + MacBook viewer の両方で意図通り動作することを確認した。
 
 - FSM が 7 分間で 32 回の mode 遷移を観測 (全 agent)。遷移は zone_transition_event 起点で、cognition cycle Step 2.5 で正しく反映
-- dialog_turn 生成は qwen3:8b + `think=false` + persona language hint (kant=English / nietzsche=German) の組み合わせで spike 同等の応答を安定生成。6 turn 2.91 秒、turn_index 単調、budget=6 で `exhausted` close
+- dialog_turn 生成は qwen3:8b + `think=false` + persona language hint で spike 同等の応答を安定生成。6 turn、turn_index 単調、budget=6 で `exhausted` close。PR #68 merge 後は 3 persona とも日本語出力 (原語鍵概念は括弧併記) で live 視認性改善
 - reflection が 22 回 trigger、semantic_memory に 24 row 蓄積、全行に `origin_reflection_id` 紐付き。M4 の reflection → semantic 経路は M5 でも regression なし
+- MacBook Godot (PR #65 schema fix + PR #66 humanoid avatar + PR #68 日本語) が ACTIVE 接続を維持し、dialog bubble + ERRE mode tint を live で視認可能。PR #71 で統合 demo 動画 (`erre-sandbox_demo.v3.mp4`, 22 MB) を evidence として配置
 
-**MacBook 側 2 項目 (#5, #6) は録画未配置で TBD**。Live 実行中に MacBook (`192.168.3.118`) からの WebSocket 接続 272 回を backend 側でログ確認。Godot viewer は接続を試行していた (接続即切断のループが観測されたため、Godot 側で別途接続安定化が必要かもしれない — 次タスク以降で調査)。
+### 初期 primary run で #5 / #6 が TBD だった理由 (履歴メモ)
+
+初期 14:14-14:21 run の時点では MacBook Godot が `schema_mismatch` で reconnect loop にハマっており、録画不能だった (Addendum 1 §根本原因)。PR #65 で Godot 側 `CLIENT_SCHEMA_VERSION` を 0.3.0-m5 に bump して handshake が通るようになり、PR #66 で avatar と bubble の視認性を強化、PR #68 で発話を日本語統一することで観察価値が高い demo 録画が取れる状態になった。PR #71 の `erre-sandbox_demo.v3.mp4` はそれら 3 件 merge 後の状態で収録されたもの。
 
 ### Live auto-fire の RNG 観察
 
@@ -58,14 +61,11 @@ orchestrator を 7 分 (~25 cognition tick) 走らせたが、`InMemoryDialogSch
 
 ## 次ステップ
 
-1. **MacBook 側 #5, #6 録画** を user 作業として依頼 (godot_project/ を 4.4 で開き、
-   `ws://g-gear.local:8000/stream` に接続して 60s 録画)
-2. 5 項目 PASS (G-GEAR 側) + 2 項目 TBD (MacBook 側) の状態で PR #64 (本 task) 作成、
-   merge 後に user 確認を経て **`v0.3.0-m5` タグ付与を提案**
+1. ~~MacBook 側 #5, #6 録画~~ → PR #71 で配置済 (`erre-sandbox_demo.v3.mp4`)
+2. 本 acceptance task は **7/7 PASS で完了**。user 明示承認を経て **`v0.3.0-m5` タグ付与**
+   (本 task では **auto で打たない**)
 3. Tag 付与後に `m5-cleanup-rollback-flags` タスクで 3 rollback flag +
    `_ZERO_MODE_DELTAS` を除去
-4. MacBook 側録画が入手でき次第 #5, #6 判定を追記 (本 PR への follow-up commit or
-   separate housekeeping PR)
 
 ## Evidence 再現手順
 
