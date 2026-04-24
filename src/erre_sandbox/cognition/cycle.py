@@ -214,6 +214,13 @@ class CognitionCycle:
         # via ``ERRE_ZONE_BIAS_P`` between runs; see
         # ``.steering/20260424-m7-differentiation-observability/design-final.md``.
         self._zone_bias_p = float(os.environ.get("ERRE_ZONE_BIAS_P", "0.2"))
+        # Bias uses a persistent RNG (shared with ``self._rng`` when one is
+        # injected, otherwise its own ``Random()`` so consecutive ticks draw
+        # from a coherent sequence rather than fresh entropy per step).
+        # Separate field from ``self._rng`` so the ``apply_llm_delta`` noise
+        # contract ("no rng → deterministic") stays intact for callers that
+        # deliberately pass ``None``.
+        self._bias_rng = rng or Random()  # noqa: S311 — non-crypto bias nudge
 
     async def step(
         self,
@@ -348,7 +355,7 @@ class CognitionCycle:
         plan = _bias_target_zone(
             plan,
             persona,
-            self._rng or Random(),  # noqa: S311 — non-crypto bias nudge
+            self._bias_rng,
             self._zone_bias_p,
             agent_id=agent_state.agent_id,
         )
@@ -675,7 +682,7 @@ def _bias_target_zone(
         return plan
     if rng.random() >= bias_p:
         return plan
-    new_dest = rng.choice(tuple(persona.preferred_zones))
+    new_dest = rng.choice(persona.preferred_zones)
     logger.debug(
         "bias.fired agent=%s from=%s to=%s bias_p=%.2f",
         agent_id,
