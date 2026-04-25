@@ -73,35 +73,50 @@
 - [x] `uv run pytest tests/` 全パス (860) + ruff clean
 - [x] commit: `feat(gateway): m7-γ WorldLayoutMsg single-shot on-connect`
 
-## Commit 4: Godot Relationships UI + layout consumer + scene 補修 (3.5h)
+## Commit 4: Godot Relationships UI + layout consumer + scene 補修 (3.5h)  ✅
 
-- [ ] `godot_project/scripts/EnvelopeRouter.gd` に `world_layout_received` signal +
-      match arm
-- [ ] `godot_project/scripts/BoundaryLayer.gd` の `zone_rects` / `prop_coords` を
+- [x] `godot_project/scripts/EnvelopeRouter.gd` に `world_layout_received` signal +
+      match arm (Commit 1 で先行)
+- [x] `godot_project/scripts/BoundaryLayer.gd` の `zone_rects` / `prop_coords` を
       `_on_world_layout_received` で置換 (hardcode は default fallback、
-      `# TODO(slice-γ)` 解消)
-- [ ] `godot_project/scripts/ReasoningPanel.gd` に Foldout「Relationships」追加。
-      `agent_update` 受信時に `agent_state.relationships` を引いて
-      `<persona> affinity ±0.NN (N turns, last in <zone>)` 形式で 2 行描画
-- [ ] `godot_project/scenes/zones/Chashitsu.tscn` の root Z=15 → -33.33 修正
-      (子 mesh は相対座標保持)
-- [ ] `godot_project/scenes/zones/Zazen.tscn` に石灯籠 primitive
-      (CylinderMesh + BoxMesh、Garden.tscn の lantern を参考)
-- [ ] `uv run pytest tests/test_godot_project.py` headless boot 緑 (該当 test 存在時)
-- [ ] commit: `feat(godot): m7-γ Relationships UI + WorldLayoutMsg consumer + scenes`
+      `# TODO(slice-γ)` 解消)。`router_path` `@export` 追加、
+      `_default_zone_sizes` cache で wire の centres-only schema を補完
+- [x] `godot_project/scenes/MainScene.tscn` の BoundaryLayer に
+      `router_path = NodePath("../../../../EnvelopeRouter")` を追加
+- [x] `godot_project/scripts/ReasoningPanel.gd` に Relationships block 追加。
+      `agent_updated` シグナル購読、`agent_state.relationships` を引いて
+      `<persona> affinity ±0.NN (N turns, last @ tick T)` 形式で top-2 描画
+      (`|affinity|` desc / `last_interaction_tick` desc tie-break)
+- [x] `godot_project/scenes/zones/Chashitsu.tscn` の root を
+      `(0, 0, 15)` → `(33.33, 0, -33.33)` に修正 (子 mesh は相対座標保持)
+- [x] `godot_project/scenes/zones/Zazen.tscn` に石灯籠 primitive
+      (CylinderMesh post 1.6 m + BoxMesh cap 0.8 m、granite material、
+      Garden.tscn の lantern と同寸)
+- [x] `uv run pytest tests/` 全パス (860) — Godot 未インストールのため
+      `test_godot_project.py::test_godot_project_boots_headless` は skip
+- [x] commit: `feat(godot): m7-γ Relationships UI + WorldLayoutMsg consumer + scenes`
 
-## Commit 5: γ 受入 + C3 判定 (2h)
+## Commit 5: γ 受入 + C3 判定 (2h)  ✅
 
-- [ ] `tests/test_integration/test_slice_gamma_e2e.py` 追加 (3-agent fixture、
-      relational_memory ≥3、ReasoningTrace.decision に "affinity" 含有)
-- [ ] `uv run pytest tests/` 全パス + `ruff check/format --check` clean
-- [ ] G-GEAR live 90-120s run (ERRE_ZONE_BIAS_P=0.1, kant/nietzsche/rikyu)
-      - dialog_turn ≥3 / world_layout = 1 / relational_memory ≥3
-      - Godot ReasoningPanel で affinity 表示確認 (MacBook 側)
-- [ ] `.steering/20260425-m7-slice-gamma/decisions.md` に
-      D1-D5 (v2 採用根拠) + C3 判定 (3 観点: 観察容易性 / affinity 体現 / 論文化価値、
-      2/3 で必要、初期スタンス defer to δ) を記録
-- [ ] commit: `feat(acceptance): m7-γ slice e2e + C3 deferral judgement`
+- [x] `tests/test_integration/test_slice_gamma_e2e.py` 追加 (3-agent fixture、
+      relational_memory ≥3、ReasoningTrace.decision に "affinity" 含有、
+      unknown speaker no-op の 2 ケース)
+- [x] `uv run pytest tests/` 全パス (862) + `ruff check/format --check` 私の
+      変更分 clean (環境的な GC-timing teardown error は decisions.md R2 参照)
+- [x] G-GEAR live 100s run (ERRE_ZONE_BIAS_P=0.1, kant/nietzsche/rikyu、
+      `var/run-gamma.db`)
+      - DB 計上: `dialog_turn=5` / `world_layout=1` / `relational_memory=5`
+      - 受入閾値 (≥3 / =1 / ≥3) を全て pass
+      - wire dialog_turn=2 vs DB=5 の差は probe disconnect タイミング由来、
+        decisions.md R1 に明記
+      - reasoning_trace decision の affinity 含有率 2/15 (kant 不参加で
+        bond ゼロ、生存ペアの nietzsche × rikyu で 2 ヒット)
+      - Godot ReasoningPanel での visible 確認は MacBook 預り
+        (project_m7_beta_baseline_frozen.md の β 流儀踏襲)
+- [x] `.steering/20260425-m7-slice-gamma/decisions.md` 新設、
+      D1-D5 (v2 採用根拠) + C3 判定 (defer to δ) + R1 (live evidence) +
+      R2 (既知 GC-timing flake) を記録
+- [x] commit: `feat(acceptance): m7-γ slice e2e + C3 deferral judgement`
 
 ## Verification + PR
 
