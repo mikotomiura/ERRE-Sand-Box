@@ -32,7 +32,7 @@
           "type": "array"
         },
         "schema_version": {
-          "default": "0.5.0-m8",
+          "default": "0.6.0-m7g",
           "title": "Schema Version",
           "type": "string"
         },
@@ -71,7 +71,7 @@
           "type": "string"
         },
         "schema_version": {
-          "default": "0.5.0-m8",
+          "default": "0.6.0-m7g",
           "title": "Schema Version",
           "type": "string"
         },
@@ -117,7 +117,7 @@
           "type": "boolean"
         },
         "schema_version": {
-          "default": "0.5.0-m8",
+          "default": "0.6.0-m7g",
           "title": "Schema Version",
           "type": "string"
         },
@@ -247,7 +247,7 @@
           "type": "string"
         },
         "schema_version": {
-          "default": "0.5.0-m8",
+          "default": "0.6.0-m7g",
           "title": "Schema Version",
           "type": "string"
         },
@@ -285,7 +285,7 @@
           "type": "string"
         },
         "schema_version": {
-          "default": "0.5.0-m8",
+          "default": "0.6.0-m7g",
           "title": "Schema Version",
           "type": "string"
         },
@@ -335,7 +335,7 @@
           "type": "string"
         },
         "schema_version": {
-          "default": "0.5.0-m8",
+          "default": "0.6.0-m7g",
           "title": "Schema Version",
           "type": "string"
         },
@@ -450,7 +450,7 @@
           "type": "string"
         },
         "schema_version": {
-          "default": "0.5.0-m8",
+          "default": "0.6.0-m7g",
           "title": "Schema Version",
           "type": "string"
         },
@@ -500,7 +500,7 @@
           "type": "string"
         },
         "schema_version": {
-          "default": "0.5.0-m8",
+          "default": "0.6.0-m7g",
           "title": "Schema Version",
           "type": "string"
         },
@@ -537,7 +537,7 @@
           "type": "string"
         },
         "schema_version": {
-          "default": "0.5.0-m8",
+          "default": "0.6.0-m7g",
           "title": "Schema Version",
           "type": "string"
         },
@@ -691,6 +691,52 @@
       "title": "Position",
       "type": "object"
     },
+    "PropLayout": {
+      "additionalProperties": false,
+      "description": "One static prop row in :class:`WorldLayoutMsg` (M7γ).\n\nMirrors :class:`~erre_sandbox.world.zones.PropSpec` over the wire and\nmatches the affordance fields of :class:`AffordanceEvent` so Godot can\nplace the prop without a separate prop-catalogue lookup.",
+      "properties": {
+        "prop_id": {
+          "title": "Prop Id",
+          "type": "string"
+        },
+        "prop_kind": {
+          "title": "Prop Kind",
+          "type": "string"
+        },
+        "salience": {
+          "default": 0.5,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Salience",
+          "type": "number"
+        },
+        "x": {
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "title": "Y",
+          "type": "number"
+        },
+        "z": {
+          "title": "Z",
+          "type": "number"
+        },
+        "zone": {
+          "$ref": "#/$defs/Zone"
+        }
+      },
+      "required": [
+        "prop_id",
+        "prop_kind",
+        "zone",
+        "x",
+        "y",
+        "z"
+      ],
+      "title": "PropLayout",
+      "type": "object"
+    },
     "ReasoningTrace": {
       "additionalProperties": false,
       "description": "One tick of structured reasoning rationale (M6-A-3).\n\nProduced alongside an :class:`LLMPlan` by the cognition cycle's Step 5\nwhen the LLM fills the optional ``salient`` / ``decision`` /\n``next_intent`` fields. Unlike :class:`ReflectionEvent` (which distils\nmany ticks into one stored memory), this trace captures per-tick\nself-explanation — primarily for xAI observability in the Godot UI.\n\nAll three narrative fields are optional because stable Ollama output is\nnever 100%; downstream consumers must tolerate ``None``. The trace is\nsafe to discard if missing — :class:`LLMPlan` parsing is independent,\nso a persona can produce a valid plan without producing a trace.",
@@ -720,6 +766,14 @@
         "mode": {
           "$ref": "#/$defs/ERREModeName"
         },
+        "nearby_agents": {
+          "description": "Up to two ``ProximityEvent.other_agent_id`` values with crossing=\"enter\" that informed this tick (M7γ). Order is insertion order from the observation stream.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Nearby Agents",
+          "type": "array"
+        },
         "next_intent": {
           "anyOf": [
             {
@@ -732,6 +786,22 @@
           "default": null,
           "description": "Forward-looking intent surfaced for upcoming ticks.",
           "title": "Next Intent"
+        },
+        "observed_objects": {
+          "description": "Top-3 ``AffordanceEvent.prop_id`` values by salience that informed this tick's decision (M7γ). Empty list means the tick had no affordance signal worth surfacing — not a missing field.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Observed Objects",
+          "type": "array"
+        },
+        "retrieved_memories": {
+          "description": "Top-3 ``MemoryEntry.id`` values surfaced by recall calls during this tick (M7γ). Lets the xAI panel link the decision back to the specific memory rows it leaned on.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Retrieved Memories",
+          "type": "array"
         },
         "salient": {
           "anyOf": [
@@ -771,7 +841,7 @@
           "type": "string"
         },
         "schema_version": {
-          "default": "0.5.0-m8",
+          "default": "0.6.0-m7g",
           "title": "Schema Version",
           "type": "string"
         },
@@ -850,7 +920,7 @@
           "type": "string"
         },
         "schema_version": {
-          "default": "0.5.0-m8",
+          "default": "0.6.0-m7g",
           "title": "Schema Version",
           "type": "string"
         },
@@ -985,7 +1055,7 @@
           "type": "string"
         },
         "schema_version": {
-          "default": "0.5.0-m8",
+          "default": "0.6.0-m7g",
           "title": "Schema Version",
           "type": "string"
         },
@@ -1016,6 +1086,54 @@
       "title": "SpeechMsg",
       "type": "object"
     },
+    "WorldLayoutMsg": {
+      "additionalProperties": false,
+      "description": "Per-session single-shot world layout snapshot (M7γ, on-connect).\n\nCarries the static zone centroids and prop coordinates that the Godot\n:class:`BoundaryLayer` and ``BaseTerrain`` need to draw the world. In γ\nthe layout is immutable per run, so the gateway emits exactly one\n:class:`WorldLayoutMsg` immediately before the handshake-completing\n``registry.add(...)`` call; differential updates are out of scope until\na runtime mutates :data:`~erre_sandbox.world.zones.ZONE_CENTERS`.\n\n``tick=0`` is conventional (the snapshot logically belongs to session\nsetup, not to any in-progress tick) and is asserted by the\n``test_envelope_fixtures.py`` shared-invariant test.",
+      "properties": {
+        "kind": {
+          "const": "world_layout",
+          "default": "world_layout",
+          "title": "Kind",
+          "type": "string"
+        },
+        "props": {
+          "description": "Flattened ``ZONE_PROPS`` rows — one entry per prop, iterated zone-by-zone. Empty when no zone declares props.",
+          "items": {
+            "$ref": "#/$defs/PropLayout"
+          },
+          "title": "Props",
+          "type": "array"
+        },
+        "schema_version": {
+          "default": "0.6.0-m7g",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "sent_at": {
+          "format": "date-time",
+          "title": "Sent At",
+          "type": "string"
+        },
+        "tick": {
+          "minimum": 0,
+          "title": "Tick",
+          "type": "integer"
+        },
+        "zones": {
+          "description": "One row per :class:`Zone` enum member, in declaration order.",
+          "items": {
+            "$ref": "#/$defs/ZoneLayout"
+          },
+          "title": "Zones",
+          "type": "array"
+        }
+      },
+      "required": [
+        "tick"
+      ],
+      "title": "WorldLayoutMsg",
+      "type": "object"
+    },
     "WorldTickMsg": {
       "additionalProperties": false,
       "description": "Global clock pulse (G-GEAR → MacBook, heartbeat).",
@@ -1032,7 +1150,7 @@
           "type": "string"
         },
         "schema_version": {
-          "default": "0.5.0-m8",
+          "default": "0.6.0-m7g",
           "title": "Schema Version",
           "type": "string"
         },
@@ -1070,6 +1188,35 @@
       ],
       "title": "Zone",
       "type": "string"
+    },
+    "ZoneLayout": {
+      "additionalProperties": false,
+      "description": "One zone centroid in :class:`WorldLayoutMsg` (M7γ).\n\nMirrors the in-process ``ZONE_CENTERS`` table from\n:mod:`erre_sandbox.world.zones`. Sent once per WS connection so the Godot\n:class:`BoundaryLayer` can replace its hard-coded ``zone_rects`` with\nserver-authored coordinates without polling.",
+      "properties": {
+        "x": {
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "title": "Y",
+          "type": "number"
+        },
+        "z": {
+          "title": "Z",
+          "type": "number"
+        },
+        "zone": {
+          "$ref": "#/$defs/Zone"
+        }
+      },
+      "required": [
+        "zone",
+        "x",
+        "y",
+        "z"
+      ],
+      "title": "ZoneLayout",
+      "type": "object"
     }
   },
   "discriminator": {
@@ -1085,6 +1232,7 @@
       "reasoning_trace": "#/$defs/ReasoningTraceMsg",
       "reflection_event": "#/$defs/ReflectionEventMsg",
       "speech": "#/$defs/SpeechMsg",
+      "world_layout": "#/$defs/WorldLayoutMsg",
       "world_tick": "#/$defs/WorldTickMsg"
     },
     "propertyName": "kind"
@@ -1125,6 +1273,9 @@
     },
     {
       "$ref": "#/$defs/ReflectionEventMsg"
+    },
+    {
+      "$ref": "#/$defs/WorldLayoutMsg"
     }
   ]
 }

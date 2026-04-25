@@ -41,7 +41,7 @@ from pydantic import BaseModel, ConfigDict, Field
 # §1 Protocol constants
 # =============================================================================
 
-SCHEMA_VERSION: Final[str] = "0.5.0-m8"
+SCHEMA_VERSION: Final[str] = "0.6.0-m7g"
 """Semantic version of the wire contract.
 
 Bumped whenever any on-wire model gains or loses a field, or a discriminator
@@ -69,6 +69,20 @@ wire-compatible. Firing logic lives in ``world/tick.py`` (Affordance /
 Proximity / Temporal) and ``cognition/cycle.py`` (Biorhythm) and is wired
 in the M6-A-2b sub-task; the schema bump is taken early so the four
 M6-A tracks can type-hint against the frozen contract.
+
+M7γ bump (0.5.0-m8 → 0.6.0-m7g): adds :class:`WorldLayoutMsg` (§7) with
+its :class:`ZoneLayout` / :class:`PropLayout` row types, plus three new
+default-empty list fields on :class:`ReasoningTrace`
+(``observed_objects`` / ``nearby_agents`` / ``retrieved_memories``) so the
+xAI :class:`ReasoningPanel` can show *why* a tick produced its decision.
+The bump is additive and wire-compatible: the new ``world_layout``
+discriminator is independent (no other variant changes), and the three
+new ``ReasoningTrace`` fields use ``default_factory=list`` so older M8
+producers that emit traces without them remain valid. The minor bump is
+required because ``HandshakeMsg`` does a strict version match in
+``integration/gateway.py`` and will reject 0.5.0-m8 peers against a
+0.6.0-m7g gateway. See ``.steering/20260425-m7-slice-gamma/`` and the
+``zany-gathering-teapot`` plan file for the rationale.
 
 M8 bump (0.4.0-m6 → 0.5.0-m8): adds :class:`EpochPhase` (§2) and
 :class:`RunLifecycleState` (§4.5) for the two-phase methodology adopted in
@@ -708,6 +722,30 @@ class ReasoningTrace(BaseModel):
         default=None,
         description="Forward-looking intent surfaced for upcoming ticks.",
     )
+    observed_objects: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Top-3 ``AffordanceEvent.prop_id`` values by salience that informed "
+            "this tick's decision (M7γ). Empty list means the tick had no "
+            "affordance signal worth surfacing — not a missing field."
+        ),
+    )
+    nearby_agents: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Up to two ``ProximityEvent.other_agent_id`` values with "
+            'crossing="enter" that informed this tick (M7γ). Order is '
+            "insertion order from the observation stream."
+        ),
+    )
+    retrieved_memories: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Top-3 ``MemoryEntry.id`` values surfaced by recall calls during "
+            "this tick (M7γ). Lets the xAI panel link the decision back to the "
+            "specific memory rows it leaned on."
+        ),
+    )
     created_at: datetime = Field(default_factory=_utc_now)
 
 
@@ -894,6 +932,71 @@ class ReflectionEventMsg(_EnvelopeBase):
     event: ReflectionEvent
 
 
+class ZoneLayout(BaseModel):
+    """One zone centroid in :class:`WorldLayoutMsg` (M7γ).
+
+    Mirrors the in-process ``ZONE_CENTERS`` table from
+    :mod:`erre_sandbox.world.zones`. Sent once per WS connection so the Godot
+    :class:`BoundaryLayer` can replace its hard-coded ``zone_rects`` with
+    server-authored coordinates without polling.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    zone: Zone
+    x: float
+    y: float
+    z: float
+
+
+class PropLayout(BaseModel):
+    """One static prop row in :class:`WorldLayoutMsg` (M7γ).
+
+    Mirrors :class:`~erre_sandbox.world.zones.PropSpec` over the wire and
+    matches the affordance fields of :class:`AffordanceEvent` so Godot can
+    place the prop without a separate prop-catalogue lookup.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    prop_id: str
+    prop_kind: str
+    zone: Zone
+    x: float
+    y: float
+    z: float
+    salience: _Unit = 0.5
+
+
+class WorldLayoutMsg(_EnvelopeBase):
+    """Per-session single-shot world layout snapshot (M7γ, on-connect).
+
+    Carries the static zone centroids and prop coordinates that the Godot
+    :class:`BoundaryLayer` and ``BaseTerrain`` need to draw the world. In γ
+    the layout is immutable per run, so the gateway emits exactly one
+    :class:`WorldLayoutMsg` immediately before the handshake-completing
+    ``registry.add(...)`` call; differential updates are out of scope until
+    a runtime mutates :data:`~erre_sandbox.world.zones.ZONE_CENTERS`.
+
+    ``tick=0`` is conventional (the snapshot logically belongs to session
+    setup, not to any in-progress tick) and is asserted by the
+    ``test_envelope_fixtures.py`` shared-invariant test.
+    """
+
+    kind: Literal["world_layout"] = "world_layout"
+    zones: list[ZoneLayout] = Field(
+        default_factory=list,
+        description="One row per :class:`Zone` enum member, in declaration order.",
+    )
+    props: list[PropLayout] = Field(
+        default_factory=list,
+        description=(
+            "Flattened ``ZONE_PROPS`` rows — one entry per prop, "
+            "iterated zone-by-zone. Empty when no zone declares props."
+        ),
+    )
+
+
 class DialogCloseMsg(_EnvelopeBase):
     """A dialog has ended (M4 foundation).
 
@@ -922,7 +1025,8 @@ ControlEnvelope: TypeAlias = Annotated[
     | DialogTurnMsg
     | DialogCloseMsg
     | ReasoningTraceMsg
-    | ReflectionEventMsg,
+    | ReflectionEventMsg
+    | WorldLayoutMsg,
     Field(discriminator="kind"),
 ]
 """Discriminated union of all WebSocket envelope kinds."""
@@ -1100,6 +1204,7 @@ __all__ = [
     "Physical",
     "PlutchikDimension",
     "Position",
+    "PropLayout",
     "ProximityEvent",
     "ReasoningTrace",
     "ReasoningTraceMsg",
@@ -1115,7 +1220,9 @@ __all__ = [
     "SpeechMsg",
     "TemporalEvent",
     "TimeOfDay",
+    "WorldLayoutMsg",
     "WorldTickMsg",
     "Zone",
+    "ZoneLayout",
     "ZoneTransitionEvent",
 ]

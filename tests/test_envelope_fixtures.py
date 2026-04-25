@@ -96,12 +96,22 @@ def test_agent_update_fixture_references_kant_persona() -> None:
     assert data["agent_state"]["position"]["zone"] == "peripatos"
 
 
+# Fixture stems whose ``tick`` legitimately diverges from the coherent
+# tick-42 scenario. ``handshake`` is session-start; ``world_layout`` is the
+# M7γ on-connect single-shot snapshot that conventionally rides at tick 0.
+_TICK_42_EXEMPT_STEMS: frozenset[str] = frozenset({"handshake", "world_layout"})
+
+
 def test_shared_invariants_across_fixtures() -> None:
     """Coherent-scenario fixtures share tick 42, the same sent_at, and agent id."""
     for path in _FIXTURE_PATHS:
         data = json.loads(path.read_text(encoding="utf-8"))
         assert data["sent_at"] == "2026-04-18T12:00:00Z", path.name
-        if path.stem != "handshake":
+        if path.stem not in _TICK_42_EXEMPT_STEMS:
             assert data["tick"] == 42, f"{path.name} should be tick 42"
+        else:
+            assert data["tick"] == 0, (
+                f"{path.name} is exempt from tick 42 but should be at tick 0"
+            )
         if "agent_id" in data:
             assert data["agent_id"] == "a_kant_001", path.name

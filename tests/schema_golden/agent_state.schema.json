@@ -390,7 +390,7 @@
       "type": "array"
     },
     "schema_version": {
-      "default": "0.5.0-m8",
+      "default": "0.6.0-m7g",
       "title": "Schema Version",
       "type": "string"
     },
