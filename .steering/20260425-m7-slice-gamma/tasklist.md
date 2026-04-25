@@ -118,10 +118,14 @@
       R2 (既知 GC-timing flake) を記録
 - [x] commit: `feat(acceptance): m7-γ slice e2e + C3 deferral judgement`
 
-## Verification + PR
+## Verification + PR  ✅
 
-- [ ] `/review-changes` で code-reviewer 起動、HIGH 全対応 (security skip 可)
-- [ ] `git push -u origin feat/m7-slice-gamma`
-- [ ] `gh pr create` with 受入チェック
-- [ ] PR URL を decisions.md に記録
+- [x] code-reviewer 起動、HIGH 1 (router_path depth) + MEDIUM 1 (asymmetric
+      empty-zone policy 説明) + LOW 1 (String(parts[1]) 冗長) を fixup commit
+      `093297b` で対応。MEDIUM 2 (`_open` private access) は test_dialog_sink.py
+      の既存 precedent と整合するため as-is。security-checker は
+      requirement.md の指示通り skip
+- [x] `git push -u origin feat/m7-slice-gamma`
+- [x] `gh pr create` 完了 → https://github.com/mikotomiura/ERRE-Sandbox/pull/92
+- [x] PR URL を `decisions.md` 末尾の "PR" 節に記録
 - [ ] `/finish-task` 実行

@@ -265,4 +265,11 @@ TestClient WebSocket lifecycle (`with` context exit + explicit
 
 ## PR
 
-(filled in after `gh pr create`)
+- **URL**: https://github.com/mikotomiura/ERRE-Sandbox/pull/92
+- **Branch**: `feat/m7-slice-gamma` (6 commits)
+- **Created**: 2026-04-25
+- **Reviewer iteration**: 1 round, code-reviewer flagged HIGH `router_path`
+  depth + 2 MEDIUM (asymmetric empty-zone policy, `_open` private access)
+  + 1 LOW (`String(parts[1])` redundancy). Fixup commit `093297b`
+  resolved HIGH and MEDIUM #1 + LOW; MEDIUM #2 left as-is (matches
+  `test_dialog_sink.py` precedent for scheduler internal access).
