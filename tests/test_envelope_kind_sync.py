@@ -98,6 +98,8 @@ _EXPECTED_KINDS: frozenset[str] = frozenset(
         "reasoning_trace",
         # M6-A-4 (Reflection distillation routed over the wire)
         "reflection_event",
+        # M7γ (per-session WorldLayout snapshot for BoundaryLayer hydration)
+        "world_layout",
     },
 )
 

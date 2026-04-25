@@ -377,7 +377,7 @@ def test_schema_version_is_current_milestone() -> None:
     Pin is intentionally reusable: each milestone bump updates this literal
     together with the ``schema_version`` check in ``test_schemas_m{N}.py``.
     """
-    assert SCHEMA_VERSION == "0.5.0-m8"
+    assert SCHEMA_VERSION == "0.6.0-m7g"
 
 
 def test_agent_spec_validates_minimal_shape() -> None:

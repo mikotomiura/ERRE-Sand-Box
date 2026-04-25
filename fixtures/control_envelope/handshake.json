@@ -1,5 +1,5 @@
 {
-  "schema_version": "0.5.0-m8",
+  "schema_version": "0.6.0-m7g",
   "tick": 0,
   "sent_at": "2026-04-18T12:00:00Z",
   "kind": "handshake",
@@ -14,6 +14,9 @@
     "error",
     "dialog_initiate",
     "dialog_turn",
-    "dialog_close"
+    "dialog_close",
+    "reasoning_trace",
+    "reflection_event",
+    "world_layout"
   ]
 }
