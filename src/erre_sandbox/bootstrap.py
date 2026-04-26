@@ -222,7 +222,13 @@ def _maybe_persist_belief(
         return
     try:
         memory._upsert_semantic_sync(record)  # noqa: SLF001 — sink-internal sync hook
-    except sqlite3.OperationalError as exc:
+    except sqlite3.DatabaseError as exc:
+        # ``DatabaseError`` is the parent of ``OperationalError`` (lock
+        # contention, missing table) plus ``IntegrityError`` (CHECK / UNIQUE
+        # violations from a future schema tightening) and the rest of the
+        # sqlite3 family. The relational sink is fire-and-forget; any DB
+        # error here must be logged and swallowed so the cognition cycle
+        # does not stall on a semantic-table write (R4 M3).
         logger.warning(
             "[bootstrap] belief upsert failed for agent=%s other=%s tick=%d: %s",
             agent_id,
@@ -316,7 +322,9 @@ def _make_relational_sink(
         )
         try:
             memory._add_sync(relational_entry, None)  # noqa: SLF001 — internal sync hook
-        except sqlite3.OperationalError as exc:
+        except sqlite3.DatabaseError as exc:
+            # See ``_maybe_persist_belief`` for the rationale on the
+            # ``DatabaseError`` (vs ``OperationalError``) catch (R4 M3).
             logger.warning(
                 "[bootstrap] relational memory INSERT failed for "
                 "dialog_id=%s tick=%d: %s",
