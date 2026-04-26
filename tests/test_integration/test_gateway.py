@@ -338,6 +338,60 @@ class TestActivePhaseRobustness:
             with pytest.raises(WebSocketDisconnect):
                 ws.receive_text()
 
+    def test_recv_loop_handles_clean_websocket_disconnect(
+        self,
+        client: TestClient,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """A clean peer-side close (Godot exit, MacBook reconnect) must log at
+        DEBUG, not ERROR (live-fix D2).
+
+        Before the fix, ``WebSocketDisconnect`` propagated out of
+        ``_recv_loop`` into the surrounding ``TaskGroup`` as an
+        ``ExceptionGroup``; the outer ``except Exception`` then surfaced it
+        via ``logger.exception("session %s crashed", ...)`` at ERROR level.
+        Live-fix D2 catches the exception inside ``_recv_loop`` and demotes
+        it to DEBUG.
+        """
+        import logging
+
+        with (
+            caplog.at_level(logging.DEBUG, logger="erre_sandbox.integration.gateway"),
+            client.websocket_connect("/ws/observe") as ws,
+        ):
+            _ = _recv_envelope(ws)
+            _promote_to_active(ws)
+            # Closing the TestClient WS context cleanly disconnects.
+
+        # Allow the server task to finish logging.
+        for _ in range(50):
+            if any(
+                "peer disconnected" in r.message
+                for r in caplog.records
+            ):
+                break
+            client.portal.call(asyncio.sleep, 0.01)
+
+        # No "session X crashed" ERROR.
+        crashed = [
+            r
+            for r in caplog.records
+            if r.levelno >= logging.ERROR and "crashed" in r.message
+        ]
+        assert crashed == [], (
+            f"clean peer close produced ERROR-level crash log: {crashed}"
+        )
+
+        # The DEBUG-level breadcrumb is present.
+        debug_msgs = [
+            r
+            for r in caplog.records
+            if r.levelno == logging.DEBUG and "peer disconnected" in r.message
+        ]
+        assert debug_msgs, (
+            "expected a DEBUG 'peer disconnected' log from recv_loop on clean close"
+        )
+
 
 class TestFanOut:
     def test_two_clients_each_receive_the_same_envelope(

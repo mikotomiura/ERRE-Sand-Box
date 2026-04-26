@@ -420,6 +420,18 @@ async def _recv_loop(ws: WebSocket) -> None:
                 detail=f"no client frame for {protocol.IDLE_DISCONNECT_S}s",
             )
             raise _GracefulCloseError from None
+        except WebSocketDisconnect as exc:
+            # Peer closed the socket cleanly (1000) or mid-session (1001/1006).
+            # All three are normal Godot lifecycles: the MacBook editor exits
+            # autonomously between live runs, and re-attaching produces a
+            # fresh session. Demoting to DEBUG so a 360s run with several
+            # reconnects no longer floods ERROR via the surrounding TaskGroup
+            # (live-fix D2).
+            logger.debug(
+                "session recv_loop: peer disconnected (code=%s) — exiting cleanly",
+                getattr(exc, "code", "unknown"),
+            )
+            raise _GracefulCloseError from exc
         env = _parse_envelope(raw)
         if env is None:
             await _send_error(
