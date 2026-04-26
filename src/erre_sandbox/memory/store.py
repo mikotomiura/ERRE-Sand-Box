@@ -861,13 +861,33 @@ class MemoryStore:
         self,
         *,
         persona: str | None = None,
+        exclude_persona: str | None = None,
         since: datetime | None = None,
+        limit: int | None = None,
     ) -> Iterator[dict[str, object]]:
-        """Yield dialog turn rows as plain dicts, oldest first.
+        """Yield dialog turn rows as plain dicts.
 
-        ``persona`` filters by ``speaker_persona_id`` (addressee is not
-        matched — export is speaker-scoped for LoRA training-data semantics).
-        ``since`` filters by ``created_at >= since``.
+        Filters:
+
+        * ``persona`` — match ``speaker_persona_id = ?`` (export is
+          speaker-scoped for LoRA training-data semantics).
+        * ``exclude_persona`` — match ``speaker_persona_id != ?``. Added
+          for the M7δ ``_fetch_recent_peer_turns`` hot path so the SQLite
+          side can drop the speaker's own turns without a Python-side scan
+          (R3 H3 SQL push). Mutually compatible with ``persona``.
+        * ``since`` — match ``created_at >= since``.
+
+        Ordering / size:
+
+        * Default (``limit is None``): rows are emitted **oldest first**
+          (``created_at ASC, turn_index ASC``). This preserves the export
+          CLI semantics that pre-date M7δ.
+        * ``limit`` set: the SQL flips to ``ORDER BY ... DESC LIMIT ?`` so
+          the **most recent N rows** are returned. Callers that want
+          chronological order should reverse the result. This shape lets
+          ``_fetch_recent_peer_turns`` push the recency cutoff into SQLite
+          (no full-table scan) while the export CLI keeps its old
+          unbounded ASC iteration when ``limit`` is omitted.
 
         Returns plain dicts (not :class:`DialogTurnMsg`) so the export CLI
         can emit rows that include the resolved ``speaker_persona_id`` /
@@ -880,17 +900,25 @@ class MemoryStore:
             if persona is not None:
                 clauses.append("speaker_persona_id = ?")
                 params.append(persona)
+            if exclude_persona is not None:
+                clauses.append("speaker_persona_id != ?")
+                params.append(exclude_persona)
             if since is not None:
                 clauses.append("created_at >= ?")
                 params.append(_dt_to_text(since))
             where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+            order_dir = "DESC" if limit is not None else "ASC"
+            limit_sql = " LIMIT ?" if limit is not None else ""
+            if limit is not None:
+                params.append(int(limit))
             sql = (
                 "SELECT id, dialog_id, tick, turn_index, "
                 "speaker_agent_id, speaker_persona_id, "
                 "addressee_agent_id, addressee_persona_id, "
                 "utterance, created_at "
                 f"FROM dialog_turns {where} "
-                "ORDER BY created_at ASC, turn_index ASC"
+                f"ORDER BY created_at {order_dir}, turn_index {order_dir}"
+                f"{limit_sql}"
             )
             rows = conn.execute(sql, params).fetchall()
         for row in rows:

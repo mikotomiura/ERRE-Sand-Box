@@ -749,6 +749,14 @@ class CognitionCycle:
         cognition cycle. Returns ``[]`` on any failure — reflection D1 is
         an additive signal, not a blocking dependency.
 
+        M7δ (R3 H3 SQL push): the WHERE / LIMIT push to SQLite via
+        :meth:`MemoryStore.iter_dialog_turns(exclude_persona, limit)` so
+        the previous full-table-scan-then-Python-filter pattern (which
+        does not scale past a few thousand rows at the cycle's
+        0.3 calls/s pace) is gone. ``iter_dialog_turns`` returns the most
+        recent N rows in DESC order; we ``reversed(...)`` here to emit
+        chronologically for the downstream reflection-prompt builder.
+
         Reconstructs :class:`DialogTurnMsg` from the export-flavoured row
         dicts produced by :meth:`MemoryStore.iter_dialog_turns`. The
         non-wire fields (``schema_version`` / ``sent_at``) take their
@@ -757,7 +765,12 @@ class CognitionCycle:
         """
         try:
             rows = await asyncio.to_thread(
-                lambda: list(self._store.iter_dialog_turns()),
+                lambda: list(
+                    self._store.iter_dialog_turns(
+                        exclude_persona=persona.persona_id,
+                        limit=_PEER_TURNS_LIMIT,
+                    ),
+                ),
             )
         except sqlite3.OperationalError as exc:
             logger.warning(
@@ -765,12 +778,9 @@ class CognitionCycle:
                 exc,
             )
             return []
-        peer_rows = [
-            r for r in rows if r.get("speaker_persona_id") != persona.persona_id
-        ]
-        peer_rows = peer_rows[-_PEER_TURNS_LIMIT:]
+        # SQL emits DESC (most recent first); reverse for chronological prompt.
         out: list[DialogTurnMsg] = []
-        for row in peer_rows:
+        for row in reversed(rows):
             try:
                 out.append(
                     DialogTurnMsg(
