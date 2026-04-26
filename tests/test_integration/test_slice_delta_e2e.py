@@ -332,3 +332,95 @@ async def test_delta_belief_promotion_uses_deterministic_id(
     assert len(set(ids)) == len(ids), (
         f"expected unique ids per dyad (deterministic upsert); got {ids}"
     )
+
+
+# =============================================================================
+# R4 M3 — except scope broadened to ``sqlite3.DatabaseError``
+# =============================================================================
+
+
+async def test_relational_sink_swallows_integrity_error_on_add_sync(
+    runtime_with_three_agents: WorldRuntime,
+    store: MemoryStore,
+    persona_registry: dict[str, PersonaSpec],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``IntegrityError`` raised inside ``_add_sync`` must be swallowed (R4 M3).
+
+    Before the broadening, only ``OperationalError`` was caught. A
+    ``sqlite3.IntegrityError`` (CHECK / UNIQUE violation from a future
+    schema tightening) would propagate out of the sink and crash the
+    cognition cycle. ``DatabaseError`` covers both.
+    """
+    import sqlite3
+
+    def _raise_integrity_error(*_args: object, **_kwargs: object) -> None:
+        raise sqlite3.IntegrityError("simulated CHECK violation")
+
+    monkeypatch.setattr(store, "_add_sync", _raise_integrity_error)
+
+    sink = _make_relational_sink(
+        runtime=runtime_with_three_agents,
+        memory=store,
+        persona_registry=persona_registry,
+    )
+    scheduler = InMemoryDialogScheduler(envelope_sink=lambda _: None, turn_sink=sink)
+    dialog_id = _open_dialog(scheduler, tick=10)
+
+    # Drive a single turn — sink must log + return, not raise.
+    scheduler.record_turn(
+        DialogTurnMsg(
+            tick=20,
+            dialog_id=dialog_id,
+            speaker_id=_agent_id("kant"),
+            addressee_id=_agent_id("nietzsche"),
+            utterance="A measured question.",
+            turn_index=0,
+        ),
+    )
+    # Reaching here means the sink returned cleanly.
+
+
+async def test_belief_persist_swallows_integrity_error_on_upsert_semantic(
+    runtime_with_three_agents: WorldRuntime,
+    store: MemoryStore,
+    persona_registry: dict[str, PersonaSpec],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``IntegrityError`` raised inside ``_upsert_semantic_sync`` must be swallowed.
+
+    Mirror of the relational-sink test for the belief-promotion path
+    (R4 M3, second catch site at ``bootstrap.py:_maybe_persist_belief``).
+    """
+    import sqlite3
+
+    def _raise_integrity_error(*_args: object, **_kwargs: object) -> None:
+        raise sqlite3.IntegrityError("simulated UNIQUE violation")
+
+    monkeypatch.setattr(store, "_upsert_semantic_sync", _raise_integrity_error)
+
+    sink = _make_relational_sink(
+        runtime=runtime_with_three_agents,
+        memory=store,
+        persona_registry=persona_registry,
+    )
+    scheduler = InMemoryDialogScheduler(envelope_sink=lambda _: None, turn_sink=sink)
+    dialog_id = _open_dialog(scheduler, tick=10)
+
+    # Drive 14 turns so the belief gates ought to fire — each promotion
+    # attempt hits the patched upsert and must be swallowed.
+    for i in range(14):
+        speaker, addressee = (
+            ("kant", "nietzsche") if i % 2 == 0 else ("nietzsche", "kant")
+        )
+        scheduler.record_turn(
+            DialogTurnMsg(
+                tick=20 + i,
+                dialog_id=dialog_id,
+                speaker_id=_agent_id(speaker),
+                addressee_id=_agent_id(addressee),
+                utterance="A pointed exchange.",
+                turn_index=i,
+            ),
+        )
+    # Reaching here means the sink swallowed every IntegrityError.
