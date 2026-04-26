@@ -73,6 +73,7 @@ design-final.md 確定後にここを書く。仮の skeleton:
 - [x] **Residual closed via run-02** (option A: --duration 360, no code
       change) → 5/5 PASS, peak |affinity|=0.471, 1 belief promotion
       (kant wary→nietzsche). branch = chore/m7-delta-live-fix.
+      → https://github.com/mikotomiura/ERRE-Sandbox/pull/98
 
 ## Verification
 
