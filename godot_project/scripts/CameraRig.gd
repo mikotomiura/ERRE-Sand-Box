@@ -27,8 +27,9 @@ enum Mode { OVERVIEW, FOLLOW_AGENT, MIND_PEEK, TOP_DOWN }
 # M7-ζ-1: live verification (2026-04-21) reported "マウスなどで操作してから
 # world 内を俯瞰して全体などが見れたり、world を寄せてからもっと近くで
 # 見れるように" — the researcher wanted snappier framing without spinning
-# the wheel for several seconds. The original M6-B-1 values were tuned for
-# subtle inspection; ζ doubles orbit / pan and bumps zoom by ~60% so that
+# the wheel for several seconds. The original M6-B-1 values (orbit_speed
+# 0.006 / zoom_speed 2.5 / pan_speed 12.0) were tuned for subtle
+# inspection; ζ doubles orbit / pan and bumps zoom by ~60% so that
 # rotating around an avatar or panning across the 100 m world only takes a
 # couple of mouse-flicks. Compound shortcuts (shift+drag, double-click
 # focus) stay deferred to a later UX slice.

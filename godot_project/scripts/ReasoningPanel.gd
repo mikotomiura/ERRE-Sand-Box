@@ -337,13 +337,13 @@ func _format_relationships(bonds: Array) -> String:
 		var tail: String
 		if last_tick != null:
 			if last_zone != null and str(last_zone) != "":
-				tail = "last in %s @ tick %d" % [str(last_zone), int(last_tick)]
+				tail = Strings.LABELS["BOND_LAST_IN_ZONE"] % [str(last_zone), int(last_tick)]
 			else:
-				tail = "last @ tick %d" % int(last_tick)
+				tail = Strings.LABELS["BOND_LAST_TICK"] % int(last_tick)
 		else:
-			tail = "no tick yet"
+			tail = Strings.LABELS["BOND_NO_TICK"]
 		lines.append(
-			"%s affinity %+.2f (%d turns, %s)" % [
+			Strings.LABELS["BOND_LINE"] % [
 				entry.get("persona", ""),
 				entry.get("affinity", 0.0),
 				entry.get("turns", 0),

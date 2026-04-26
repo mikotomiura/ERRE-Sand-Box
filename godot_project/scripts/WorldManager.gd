@@ -69,10 +69,10 @@ var _last_active_agents: int = 0
 @export var day_cycle_seconds: float = 1800.0
 var _day_phase_s: float = 0.0
 var _day_timer: Timer = null
-# Preserve the authored DirectionalLight3D translation so we only spin the
-# light's basis — keeping position untouched stops the editor scene file
-# from drifting when the rig is replayed without the day cycle.
-const _LIGHT_ORIGIN: Vector3 = Vector3(0.0, 10.0, 0.0)
+# Captured from the authored DirectionalLight3D position at boot (review M2)
+# so we only spin the light's basis around its tscn-defined origin — if the
+# scene moves the light, this code follows without code edit.
+var _light_origin: Vector3 = Vector3.ZERO
 # Palette keyed at midnight / dawn / noon / dusk. The day cycle linearly
 # interpolates between adjacent keys so 1 Hz steps produce a smooth (not
 # step-quantised) sky transition without per-frame work.
@@ -174,6 +174,9 @@ func _setup_day_cycle() -> void:
 	if day_cycle_seconds <= 0.0:
 		push_warning("[WorldManager] day_cycle_seconds <= 0; cycle disabled")
 		return
+	# Capture the authored light position so phase paints rotate around the
+	# tscn-defined origin (review M2 — was hard-coded to (0, 10, 0) before).
+	_light_origin = _directional_light.position
 	_day_timer = Timer.new()
 	_day_timer.name = "DayCycleTimer"
 	_day_timer.wait_time = 1.0
@@ -181,8 +184,9 @@ func _setup_day_cycle() -> void:
 	_day_timer.one_shot = false
 	_day_timer.timeout.connect(_step_day_phase)
 	add_child(_day_timer)
-	# Boot at noon-ish so the first frame is not the worst-lit slice (live
-	# observation: starting at midnight makes the world look broken on entry).
+	# Boot at noon (phase π) so the first frame is not the worst-lit slice
+	# (live observation: starting at midnight makes the world look broken on
+	# entry).
 	_day_phase_s = day_cycle_seconds * 0.5
 	_paint_phase()
 
@@ -197,13 +201,13 @@ func _step_day_phase() -> void:
 func _paint_phase() -> void:
 	var phase: float = TAU * _day_phase_s / day_cycle_seconds
 	if _directional_light != null:
-		# Phase 0 puts the sun below the horizon (midnight); +π/2 lifts it
-		# to noon overhead. The ``+ PI / 2.0`` offset aligns the X-axis basis
-		# rotation with the wall-clock semantics so phase advances forward
-		# in time rather than reversed.
+		# Phase 0 puts the sun below the horizon (midnight); phase π places
+		# it overhead (noon). The ``+ PI / 2.0`` offset rotates the X-axis
+		# basis so the time-of-day semantics align with the palette: phase=0
+		# midnight → π/2 dawn → π noon → 3π/2 dusk → 2π midnight.
 		_directional_light.transform = Transform3D(
 			Basis(Vector3.RIGHT, phase + PI / 2.0),
-			_LIGHT_ORIGIN,
+			_light_origin,
 		)
 	_apply_palette_for_phase(phase)
 

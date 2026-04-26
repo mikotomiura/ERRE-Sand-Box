@@ -24,6 +24,9 @@ const LABELS: Dictionary = {
 	# Reasoning panel — title & status
 	"PANEL_TITLE": "Reasoning Panel",
 	"PANEL_TITLE_FOR_AGENT": "Reasoning Panel — %s",
+	# ``PANEL_TITLE_FOR_AGENT_PERSONA`` is consumed in PR-ζ-2 once
+	# ReasoningTrace.persona_id lands on the wire. Living here so the locale
+	# dict stays the single source of truth across slices.
 	"PANEL_TITLE_FOR_AGENT_PERSONA": "Reasoning Panel — %s (%s)",
 	"AGENT_NONE": "(エージェント未選択)",
 	"AGENT_WAITING": "(トレース待ち)",
@@ -35,4 +38,12 @@ const LABELS: Dictionary = {
 	"VALUE_DASH": "—",
 	# Agent selector
 	"SELECTOR_PROMPT": "(エージェント選択)",
+	# Reasoning panel — relationship bond formatting (M7-ζ-1 review M1).
+	# ``BOND_LINE`` consumes ``[persona, affinity, ichigo_ichie_count, tail]``;
+	# ``tail`` is one of ``BOND_LAST_IN_ZONE`` / ``BOND_LAST_TICK`` /
+	# ``BOND_NO_TICK`` depending on which fields the bond carries.
+	"BOND_LINE": "%s  親和度 %+.2f  (%d 回, %s)",
+	"BOND_LAST_IN_ZONE": "前回 %s @ tick %d",
+	"BOND_LAST_TICK": "前回 @ tick %d",
+	"BOND_NO_TICK": "tick 履歴なし",
 }
