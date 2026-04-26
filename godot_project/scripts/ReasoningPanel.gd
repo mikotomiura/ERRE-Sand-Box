@@ -21,6 +21,10 @@
 # avatar click events.
 extends Control
 
+# M7-ζ-1: route all user-facing labels through the locale dict so the
+# JP/EN flip (and the future ``tr()`` migration) needs only the dict edit.
+const Strings = preload("res://scripts/i18n/Strings.gd")
+
 @export var router_path: NodePath
 
 var _focused_agent: String = ""
@@ -88,23 +92,23 @@ func _build_tree() -> void:
 	vbox.add_theme_constant_override("separation", 10)
 	margin.add_child(vbox)
 
-	_title_label = _make_label(vbox, "Reasoning Panel", 18, Color(0.9, 0.92, 0.95, 1.0))
-	_mode_label = _make_label(vbox, "(no agent selected)", 12, Color(0.65, 0.75, 0.9, 1.0))
+	_title_label = _make_label(vbox, Strings.LABELS["PANEL_TITLE"], 18, Color(0.9, 0.92, 0.95, 1.0))
+	_mode_label = _make_label(vbox, Strings.LABELS["AGENT_NONE"], 12, Color(0.65, 0.75, 0.9, 1.0))
 	vbox.add_child(_make_divider())
 
-	_make_label(vbox, "SALIENT", 11, Color(0.8, 0.7, 0.4, 1.0))
-	_salient_label = _make_label(vbox, "—", 14, Color(0.95, 0.95, 0.95, 1.0))
+	_make_label(vbox, Strings.LABELS["SALIENT"], 11, Color(0.8, 0.7, 0.4, 1.0))
+	_salient_label = _make_label(vbox, Strings.LABELS["VALUE_DASH"], 14, Color(0.95, 0.95, 0.95, 1.0))
 
-	_make_label(vbox, "DECISION", 11, Color(0.8, 0.5, 0.5, 1.0))
-	_decision_label = _make_label(vbox, "—", 14, Color(0.95, 0.95, 0.95, 1.0))
+	_make_label(vbox, Strings.LABELS["DECISION"], 11, Color(0.8, 0.5, 0.5, 1.0))
+	_decision_label = _make_label(vbox, Strings.LABELS["VALUE_DASH"], 14, Color(0.95, 0.95, 0.95, 1.0))
 
-	_make_label(vbox, "NEXT INTENT", 11, Color(0.4, 0.8, 0.6, 1.0))
-	_intent_label = _make_label(vbox, "—", 14, Color(0.95, 0.95, 0.95, 1.0))
+	_make_label(vbox, Strings.LABELS["NEXT_INTENT"], 11, Color(0.4, 0.8, 0.6, 1.0))
+	_intent_label = _make_label(vbox, Strings.LABELS["VALUE_DASH"], 14, Color(0.95, 0.95, 0.95, 1.0))
 
 	vbox.add_child(_make_divider())
 
-	_make_label(vbox, "LATEST REFLECTION", 11, Color(0.6, 0.7, 0.9, 1.0))
-	_reflection_label = _make_label(vbox, "(none yet)", 13, Color(0.85, 0.85, 0.9, 1.0))
+	_make_label(vbox, Strings.LABELS["LATEST_REFLECTION"], 11, Color(0.6, 0.7, 0.9, 1.0))
+	_reflection_label = _make_label(vbox, Strings.LABELS["REFLECTION_NONE"], 13, Color(0.85, 0.85, 0.9, 1.0))
 
 	vbox.add_child(_make_divider())
 
@@ -113,9 +117,9 @@ func _build_tree() -> void:
 	# researcher can read partner-specific affinity drift without opening the
 	# DB. Header colour mirrors the SALIENT block's amber to keep the
 	# affective surfaces visually coherent.
-	_make_label(vbox, "RELATIONSHIPS", 11, Color(0.85, 0.65, 0.45, 1.0))
+	_make_label(vbox, Strings.LABELS["RELATIONSHIPS"], 11, Color(0.85, 0.65, 0.45, 1.0))
 	_relationships_label = _make_label(
-		vbox, "(no peer turns yet)", 13, Color(0.92, 0.88, 0.82, 1.0),
+		vbox, Strings.LABELS["RELATIONSHIPS_NONE"], 13, Color(0.92, 0.88, 0.82, 1.0),
 	)
 
 
@@ -146,14 +150,17 @@ func set_focused_agent(agent_id: String, _agent_node: Node3D = null) -> void:
 	if agent_id == _focused_agent:
 		return
 	_focused_agent = agent_id
-	_salient_label.text = "—"
-	_decision_label.text = "—"
-	_intent_label.text = "—"
-	_reflection_label.text = "(none yet)"
-	_relationships_label.text = "(no peer turns yet)"
+	_salient_label.text = Strings.LABELS["VALUE_DASH"]
+	_decision_label.text = Strings.LABELS["VALUE_DASH"]
+	_intent_label.text = Strings.LABELS["VALUE_DASH"]
+	_reflection_label.text = Strings.LABELS["REFLECTION_NONE"]
+	_relationships_label.text = Strings.LABELS["RELATIONSHIPS_NONE"]
 	_last_reflection_tick = -1
-	_title_label.text = "Reasoning Panel — %s" % agent_id if agent_id != "" else "Reasoning Panel"
-	_mode_label.text = "(waiting for trace)"
+	if agent_id != "":
+		_title_label.text = Strings.LABELS["PANEL_TITLE_FOR_AGENT"] % agent_id
+	else:
+		_title_label.text = Strings.LABELS["PANEL_TITLE"]
+	_mode_label.text = Strings.LABELS["AGENT_WAITING"]
 
 
 # ---- EnvelopeRouter signal handlers ----
@@ -168,10 +175,10 @@ func _on_reasoning_trace_received(agent_id: String, tick: int, trace: Dictionary
 	if agent_id != _focused_agent:
 		return
 	var mode: String = trace.get("mode", "")
-	_mode_label.text = "mode: %s   |   tick: %d" % [mode, tick]
-	_salient_label.text = _coalesce(trace.get("salient"), "—")
-	_decision_label.text = _coalesce(trace.get("decision"), "—")
-	_intent_label.text = _coalesce(trace.get("next_intent"), "—")
+	_mode_label.text = Strings.LABELS["AGENT_MODE_TICK"] % [mode, tick]
+	_salient_label.text = _coalesce(trace.get("salient"), Strings.LABELS["VALUE_DASH"])
+	_decision_label.text = _coalesce(trace.get("decision"), Strings.LABELS["VALUE_DASH"])
+	_intent_label.text = _coalesce(trace.get("next_intent"), Strings.LABELS["VALUE_DASH"])
 
 
 func _on_reflection_event_received(
@@ -189,7 +196,7 @@ func _on_reflection_event_received(
 	if tick < _last_reflection_tick:
 		return
 	_last_reflection_tick = tick
-	_reflection_label.text = summary_text if summary_text != "" else "(empty summary)"
+	_reflection_label.text = summary_text if summary_text != "" else Strings.LABELS["REFLECTION_EMPTY_SUMMARY"]
 
 
 func _coalesce(value: Variant, fallback: String) -> String:
@@ -230,7 +237,7 @@ func _format_relationships(bonds: Array) -> String:
 	# the researcher's observability priority (Slice γ design D5 / R4 +
 	# Slice δ Axis 5).
 	if bonds.is_empty():
-		return "(no peer turns yet)"
+		return Strings.LABELS["RELATIONSHIPS_NONE"]
 	var ranked: Array = []
 	for raw_bond: Variant in bonds:
 		if not (raw_bond is Dictionary):
@@ -253,7 +260,7 @@ func _format_relationships(bonds: Array) -> String:
 			"abs_affinity": abs(affinity),
 		})
 	if ranked.is_empty():
-		return "(no peer turns yet)"
+		return Strings.LABELS["RELATIONSHIPS_NONE"]
 	ranked.sort_custom(_compare_relationship_rank)
 	var lines: Array[String] = []
 	for entry_value: Variant in ranked.slice(0, 2):
