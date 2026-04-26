@@ -21,6 +21,7 @@ import sqlite_vec
 
 from erre_sandbox.schemas import (
     DialogTurnMsg,
+    EpochPhase,
     MemoryEntry,
     MemoryKind,
     SemanticMemoryRecord,
@@ -208,6 +209,13 @@ class MemoryStore:
                 # from the bootstrap agent registry (see decisions D2) so the
                 # wire schema stays untouched. Idempotency via UNIQUE(dialog_id,
                 # turn_index) lets the sink re-fire safely on restart.
+                #
+                # M7ε (m7-slice-epsilon): adds ``epoch_phase`` so M8 ADR D5 /
+                # ``scaling_metrics.aggregate()`` can drop ``Q_AND_A`` turns
+                # from relational-saturation metrics. Pre-migration rows read
+                # back NULL → treated as AUTONOMOUS for backward compat
+                # (M7ε D4). Existing DBs gain the column via
+                # ``_migrate_dialog_turns_schema`` below.
                 conn.execute(
                     """
                     CREATE TABLE IF NOT EXISTS dialog_turns (
@@ -221,6 +229,7 @@ class MemoryStore:
                         addressee_persona_id TEXT NOT NULL,
                         utterance TEXT NOT NULL,
                         created_at TEXT NOT NULL,
+                        epoch_phase TEXT,
                         UNIQUE(dialog_id, turn_index)
                     )
                     """,
@@ -231,6 +240,7 @@ class MemoryStore:
                     ON dialog_turns(speaker_persona_id, created_at)
                     """,
                 )
+                self._migrate_dialog_turns_schema(conn)
                 # Bias fired events (M8 baseline-quality-metric): capture each
                 # time ``_apply_zone_bias`` replaces the LLM-chosen destination
                 # with a preferred zone. Needed to compute the bias_fired_rate
@@ -294,6 +304,28 @@ class MemoryStore:
             conn.execute(
                 "ALTER TABLE semantic_memory ADD COLUMN "
                 "confidence REAL NOT NULL DEFAULT 1.0",
+            )
+
+    @staticmethod
+    def _migrate_dialog_turns_schema(conn: sqlite3.Connection) -> None:
+        """Idempotently ensure ``dialog_turns`` carries the M7ε ``epoch_phase`` column.
+
+        M7ε (m7-slice-epsilon): adds ``epoch_phase`` (NULLable TEXT) so
+        ``scaling_metrics.aggregate()`` can filter to AUTONOMOUS turns per
+        ADR D5 / decisions D4. Pre-migration rows are NULL on read and
+        treated as AUTONOMOUS for backward compatibility.
+
+        New DBs receive the column via the ``CREATE TABLE`` above; existing
+        DBs (m4/m6/m7γ/m7δ era) reach here without it and we apply
+        ``ALTER TABLE ADD COLUMN`` on demand. Idempotent: re-running
+        ``create_schema()`` is a no-op once the column is present.
+        """
+        existing = {
+            row["name"] for row in conn.execute("PRAGMA table_info(dialog_turns)")
+        }
+        if "epoch_phase" not in existing:
+            conn.execute(
+                "ALTER TABLE dialog_turns ADD COLUMN epoch_phase TEXT",
             )
 
     async def close(self) -> None:
@@ -797,6 +829,7 @@ class MemoryStore:
         *,
         speaker_persona_id: str,
         addressee_persona_id: str,
+        epoch_phase: EpochPhase = EpochPhase.AUTONOMOUS,
     ) -> str:
         """Persist ``turn`` into the ``dialog_turns`` table synchronously.
 
@@ -804,6 +837,12 @@ class MemoryStore:
         the event-loop thread after each :meth:`record_turn` call and must
         not await. ``persona_id`` for speaker / addressee is resolved at the
         call site from the bootstrap agent registry (see decisions D2).
+
+        ``epoch_phase`` (M7ε D4): tag the row with the run lifecycle phase
+        so ``scaling_metrics.aggregate()`` can drop ``Q_AND_A`` turns
+        from relational-saturation metrics. Defaults to ``AUTONOMOUS`` so
+        every existing call site (and every M7ε run before the m9-LoRA
+        Q&A driver lands) stamps autonomous without source-side changes.
 
         Idempotent via ``INSERT OR IGNORE`` on the ``UNIQUE(dialog_id,
         turn_index)`` constraint — re-emitting the same turn after a restart
@@ -821,8 +860,8 @@ class MemoryStore:
                     "id, dialog_id, tick, turn_index, "
                     "speaker_agent_id, speaker_persona_id, "
                     "addressee_agent_id, addressee_persona_id, "
-                    "utterance, created_at"
-                    ") VALUES (?,?,?,?,?,?,?,?,?,?)",
+                    "utterance, created_at, epoch_phase"
+                    ") VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                     (
                         row_id,
                         turn.dialog_id,
@@ -834,6 +873,7 @@ class MemoryStore:
                         addressee_persona_id,
                         turn.utterance,
                         _dt_to_text(datetime.now(tz=UTC)),
+                        epoch_phase.value,
                     ),
                 )
         return row_id
@@ -844,6 +884,7 @@ class MemoryStore:
         *,
         speaker_persona_id: str,
         addressee_persona_id: str,
+        epoch_phase: EpochPhase = EpochPhase.AUTONOMOUS,
     ) -> str:
         """Async wrapper over :meth:`add_dialog_turn_sync` via ``to_thread``.
 
@@ -855,6 +896,7 @@ class MemoryStore:
             turn,
             speaker_persona_id=speaker_persona_id,
             addressee_persona_id=addressee_persona_id,
+            epoch_phase=epoch_phase,
         )
 
     def iter_dialog_turns(
@@ -864,6 +906,7 @@ class MemoryStore:
         exclude_persona: str | None = None,
         since: datetime | None = None,
         limit: int | None = None,
+        epoch_phase: EpochPhase | None = None,
     ) -> Iterator[dict[str, object]]:
         """Yield dialog turn rows as plain dicts.
 
@@ -876,6 +919,13 @@ class MemoryStore:
           side can drop the speaker's own turns without a Python-side scan
           (R3 H3 SQL push). Mutually compatible with ``persona``.
         * ``since`` — match ``created_at >= since``.
+        * ``epoch_phase`` (M7ε D4): match ``epoch_phase = ?`` **or** NULL
+          when ``epoch_phase == EpochPhase.AUTONOMOUS``. Pre-migration rows
+          (NULL on read, m4/m6/m7γ/m7δ era) are treated as AUTONOMOUS for
+          backward compat — passing ``EpochPhase.AUTONOMOUS`` therefore
+          returns both NULL and ``"autonomous"`` rows. Other values match
+          exactly with no NULL fallback. ``None`` (default) skips the
+          filter entirely.
 
         Ordering / size:
 
@@ -891,7 +941,8 @@ class MemoryStore:
 
         Returns plain dicts (not :class:`DialogTurnMsg`) so the export CLI
         can emit rows that include the resolved ``speaker_persona_id`` /
-        ``addressee_persona_id`` without having to re-join at export time.
+        ``addressee_persona_id`` / ``epoch_phase`` without having to
+        re-join at export time.
         """
         with self._conn_lock:
             conn = self._ensure_conn()
@@ -906,6 +957,13 @@ class MemoryStore:
             if since is not None:
                 clauses.append("created_at >= ?")
                 params.append(_dt_to_text(since))
+            if epoch_phase is not None:
+                if epoch_phase is EpochPhase.AUTONOMOUS:
+                    # Pre-migration rows have NULL → backward-compat AUTONOMOUS.
+                    clauses.append("(epoch_phase = ? OR epoch_phase IS NULL)")
+                else:
+                    clauses.append("epoch_phase = ?")
+                params.append(epoch_phase.value)
             where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
             order_dir = "DESC" if limit is not None else "ASC"
             limit_sql = " LIMIT ?" if limit is not None else ""
@@ -915,7 +973,7 @@ class MemoryStore:
                 "SELECT id, dialog_id, tick, turn_index, "
                 "speaker_agent_id, speaker_persona_id, "
                 "addressee_agent_id, addressee_persona_id, "
-                "utterance, created_at "
+                "utterance, created_at, epoch_phase "
                 f"FROM dialog_turns {where} "
                 f"ORDER BY created_at {order_dir}, turn_index {order_dir}"
                 f"{limit_sql}"

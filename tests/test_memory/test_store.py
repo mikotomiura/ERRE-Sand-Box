@@ -3,17 +3,19 @@
 from __future__ import annotations
 
 import asyncio
+import sqlite3
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 import pytest
 
+from erre_sandbox.memory.store import MemoryStore, _dt_to_text
 from erre_sandbox.schemas import MemoryKind
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from pathlib import Path
 
-    from erre_sandbox.memory.store import MemoryStore
     from erre_sandbox.schemas import MemoryEntry
 
 
@@ -487,6 +489,180 @@ def test_dialog_turn_count_by_persona_query(store: MemoryStore) -> None:
         ).fetchall()
     counts = {r["speaker_persona_id"]: r["turns"] for r in rows}
     assert counts == {"kant": 3, "rikyu": 1, "nietzsche": 1}
+
+
+# ---------------------------------------------------------------------------
+# M7ε — dialog_turns.epoch_phase column + migration
+# ---------------------------------------------------------------------------
+
+
+def test_dialog_turns_schema_has_epoch_phase_column(store: MemoryStore) -> None:
+    """A freshly created DB carries the M7ε ``epoch_phase`` column."""
+    conn = store._ensure_conn()
+    cols = {row["name"] for row in conn.execute("PRAGMA table_info(dialog_turns)")}
+    assert "epoch_phase" in cols
+
+
+def test_migrate_dialog_turns_schema_is_idempotent(store: MemoryStore) -> None:
+    """Running ``_migrate_dialog_turns_schema`` twice is a no-op (M7ε D4)."""
+    conn = store._ensure_conn()
+    # First call already happened during create_schema; second is a manual no-op.
+    MemoryStore._migrate_dialog_turns_schema(conn)
+    cols = {row["name"] for row in conn.execute("PRAGMA table_info(dialog_turns)")}
+    assert "epoch_phase" in cols
+
+
+def test_migrate_dialog_turns_schema_adds_column_to_pre_m7e_db(
+    tmp_path: Path,
+) -> None:
+    """A pre-M7ε DB (column missing) gains it via ALTER TABLE on create_schema().
+
+    Mirrors the ``_migrate_semantic_schema`` pre-M7δ test.
+    """
+    db_path = tmp_path / "pre_m7e.db"
+    # Build an old-shape ``dialog_turns`` table by hand (no ``epoch_phase``).
+    legacy = sqlite3.connect(db_path)
+    try:
+        legacy.execute(
+            """
+            CREATE TABLE dialog_turns (
+                id TEXT PRIMARY KEY,
+                dialog_id TEXT NOT NULL,
+                tick INTEGER NOT NULL,
+                turn_index INTEGER NOT NULL,
+                speaker_agent_id TEXT NOT NULL,
+                speaker_persona_id TEXT NOT NULL,
+                addressee_agent_id TEXT NOT NULL,
+                addressee_persona_id TEXT NOT NULL,
+                utterance TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE(dialog_id, turn_index)
+            )
+            """
+        )
+        legacy.execute(
+            "INSERT INTO dialog_turns(id, dialog_id, tick, turn_index, "
+            "speaker_agent_id, speaker_persona_id, addressee_agent_id, "
+            "addressee_persona_id, utterance, created_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (
+                "dt_legacy_0000",
+                "d_legacy",
+                10,
+                0,
+                "a_kant_001",
+                "kant",
+                "a_nietzsche_001",
+                "nietzsche",
+                "legacy turn",
+                _dt_to_text(datetime.now(tz=UTC)),
+            ),
+        )
+        legacy.commit()
+    finally:
+        legacy.close()
+
+    # Open via MemoryStore; create_schema() applies the migration.
+    upgraded = MemoryStore(db_path=db_path)
+    upgraded.create_schema()
+    try:
+        conn = upgraded._ensure_conn()
+        cols = {row["name"] for row in conn.execute("PRAGMA table_info(dialog_turns)")}
+        assert "epoch_phase" in cols
+        # The legacy row survives with NULL epoch_phase.
+        rows = list(upgraded.iter_dialog_turns())
+        assert len(rows) == 1
+        assert rows[0]["dialog_id"] == "d_legacy"
+        assert rows[0]["epoch_phase"] is None
+    finally:
+        # Synchronous close because the test runs outside an event loop.
+        if upgraded._conn is not None:
+            upgraded._conn.close()
+            upgraded._conn = None
+
+
+def test_add_dialog_turn_stamps_default_autonomous(store: MemoryStore) -> None:
+    """``add_dialog_turn_sync`` defaults ``epoch_phase`` to AUTONOMOUS."""
+    from erre_sandbox.schemas import EpochPhase
+
+    store.add_dialog_turn_sync(
+        _turn(),
+        speaker_persona_id="kant",
+        addressee_persona_id="nietzsche",
+    )
+    rows = list(store.iter_dialog_turns())
+    assert len(rows) == 1
+    assert rows[0]["epoch_phase"] == EpochPhase.AUTONOMOUS.value
+
+
+def test_add_dialog_turn_stamps_explicit_q_and_a(store: MemoryStore) -> None:
+    """Explicit ``epoch_phase=Q_AND_A`` is persisted (m9-LoRA producer path)."""
+    from erre_sandbox.schemas import EpochPhase
+
+    store.add_dialog_turn_sync(
+        _turn(),
+        speaker_persona_id="kant",
+        addressee_persona_id="nietzsche",
+        epoch_phase=EpochPhase.Q_AND_A,
+    )
+    rows = list(store.iter_dialog_turns())
+    assert len(rows) == 1
+    assert rows[0]["epoch_phase"] == EpochPhase.Q_AND_A.value
+
+
+def test_iter_dialog_turns_filters_by_epoch_phase_autonomous(
+    store: MemoryStore,
+) -> None:
+    """Filtering on AUTONOMOUS returns AUTONOMOUS rows + NULL legacy rows."""
+    from erre_sandbox.schemas import EpochPhase
+
+    # Seed one AUTONOMOUS, one Q_AND_A, plus one NULL legacy via raw SQL.
+    store.add_dialog_turn_sync(
+        _turn(turn_index=0),
+        speaker_persona_id="kant",
+        addressee_persona_id="nietzsche",
+    )
+    store.add_dialog_turn_sync(
+        _turn(turn_index=1),
+        speaker_persona_id="kant",
+        addressee_persona_id="nietzsche",
+        epoch_phase=EpochPhase.Q_AND_A,
+    )
+    conn = store._ensure_conn()
+    with store._conn_lock:
+        conn.execute(
+            "INSERT INTO dialog_turns(id, dialog_id, tick, turn_index, "
+            "speaker_agent_id, speaker_persona_id, addressee_agent_id, "
+            "addressee_persona_id, utterance, created_at, epoch_phase) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,NULL)",
+            (
+                "dt_legacy_0099",
+                "d_legacy",
+                30,
+                99,
+                "a_kant_001",
+                "kant",
+                "a_nietzsche_001",
+                "nietzsche",
+                "legacy null row",
+                _dt_to_text(datetime.now(tz=UTC)),
+            ),
+        )
+        conn.commit()
+
+    autonomous_rows = list(
+        store.iter_dialog_turns(epoch_phase=EpochPhase.AUTONOMOUS)
+    )
+    # AUTONOMOUS includes both explicit AUTONOMOUS and NULL (backward compat).
+    assert {r["turn_index"] for r in autonomous_rows} == {0, 99}
+
+    qa_rows = list(store.iter_dialog_turns(epoch_phase=EpochPhase.Q_AND_A))
+    # Q_AND_A is exact-match only, no NULL fallback.
+    assert {r["turn_index"] for r in qa_rows} == {1}
+
+    # No filter returns all 3 rows.
+    all_rows = list(store.iter_dialog_turns())
+    assert len(all_rows) == 3
 
 
 # ---------------------------------------------------------------------------
