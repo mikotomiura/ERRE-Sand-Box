@@ -68,7 +68,8 @@ design-final.md 確定後にここを書く。仮の skeleton:
       peak |affinity|=0.358 < 0.45 threshold)
 - [x] `observation.md` + `decisions.md` 更新
       (residual handed to `.steering/20260426-m7-delta-live-fix/`)
-- [ ] PR 起票 (verdict branch = chore/m7-delta-live-acceptance)
+- [x] PR 起票 (verdict branch = chore/m7-delta-live-acceptance)
+      → https://github.com/mikotomiura/ERRE-Sandbox/pull/97
 
 ## Verification
 
