@@ -42,6 +42,12 @@ var _intent_label: Label
 var _reflection_label: Label
 var _relationships_label: Label
 var _last_reflection_tick: int = -1
+# M7-ζ-2: keep up to ``_RECENT_REFLECTIONS_CAP`` of the most-recent reflection
+# events in tick-descending order. ``_last_reflection_tick`` still stamps the
+# newest seen tick so out-of-order replays do not regress to an older summary
+# (the cap-based dedupe already filters duplicates by exact tick).
+const _RECENT_REFLECTIONS_CAP: int = 3
+var _recent_reflections: Array[Dictionary] = []
 # M7-ζ-1: multi-agent selector. ``_known_agents`` mirrors the OptionButton
 # items 1..N (item 0 stays the placeholder) so SelectionManager click-focus
 # and selector changes can sync without iterating the OptionButton each
@@ -186,6 +192,7 @@ func set_focused_agent(agent_id: String, _agent_node: Node3D = null) -> void:
 	_relationships_label.text = Strings.LABELS["RELATIONSHIPS_NONE"]
 	_persona_summary_label.text = Strings.LABELS["PERSONA_SUMMARY_UNKNOWN"]
 	_last_reflection_tick = -1
+	_recent_reflections.clear()
 	if agent_id != "":
 		_title_label.text = Strings.LABELS["PANEL_TITLE_FOR_AGENT"] % agent_id
 	else:
@@ -263,12 +270,42 @@ func _on_reflection_event_received(
 		set_focused_agent(agent_id)
 	if agent_id != _focused_agent:
 		return
-	# Reflection events can arrive out of order after a reconnect; keep the
-	# latest by tick so we never regress to an older summary.
-	if tick < _last_reflection_tick:
-		return
-	_last_reflection_tick = tick
-	_reflection_label.text = summary_text if summary_text != "" else Strings.LABELS["REFLECTION_EMPTY_SUMMARY"]
+	# M7-ζ-2: keep last 3 reflections (tick desc) so the researcher can read
+	# short-term reflection cadence without opening the journal. Out-of-order
+	# replays are still filtered: a tick already in the cache is ignored, and
+	# entries older than the smallest currently held tick are dropped once
+	# the cache is at cap.
+	for entry: Dictionary in _recent_reflections:
+		if int(entry.get("tick", -1)) == tick:
+			return
+	var rendered: String = (
+		summary_text if summary_text != ""
+		else Strings.LABELS["REFLECTION_EMPTY_SUMMARY"]
+	)
+	_recent_reflections.append({"tick": tick, "summary": rendered})
+	_recent_reflections.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return int(a.get("tick", -1)) > int(b.get("tick", -1))
+	)
+	while _recent_reflections.size() > _RECENT_REFLECTIONS_CAP:
+		_recent_reflections.pop_back()
+	if tick > _last_reflection_tick:
+		_last_reflection_tick = tick
+	_reflection_label.text = _format_recent_reflections()
+
+
+func _format_recent_reflections() -> String:
+	if _recent_reflections.is_empty():
+		return Strings.LABELS["REFLECTION_NONE"]
+	var lines: Array[String] = []
+	for entry_value: Variant in _recent_reflections:
+		var entry: Dictionary = entry_value
+		lines.append(
+			Strings.LABELS["REFLECTION_LINE"] % [
+				int(entry.get("tick", 0)),
+				str(entry.get("summary", "")),
+			],
+		)
+	return "\n".join(lines)
 
 
 func _coalesce(value: Variant, fallback: String) -> String:
@@ -378,6 +415,7 @@ func _format_relationships(bonds: Array) -> String:
 		var turns: int = int(bond.get("ichigo_ichie_count", 0))
 		var last_tick_value: Variant = bond.get("last_interaction_tick")
 		var last_zone_value: Variant = bond.get("last_interaction_zone")
+		var belief_kind_value: Variant = bond.get("latest_belief_kind")
 		ranked.append({
 			"other_id": other_id,
 			"persona": _persona_from_agent_id(other_id),
@@ -385,6 +423,7 @@ func _format_relationships(bonds: Array) -> String:
 			"turns": turns,
 			"last_tick": last_tick_value,
 			"last_zone": last_zone_value,
+			"belief_kind": belief_kind_value,
 			"abs_affinity": abs(affinity),
 		})
 	if ranked.is_empty():
@@ -403,15 +442,45 @@ func _format_relationships(bonds: Array) -> String:
 				tail = Strings.LABELS["BOND_LAST_TICK"] % int(last_tick)
 		else:
 			tail = Strings.LABELS["BOND_NO_TICK"]
-		lines.append(
-			Strings.LABELS["BOND_LINE"] % [
-				entry.get("persona", ""),
-				entry.get("affinity", 0.0),
-				entry.get("turns", 0),
-				tail,
-			]
-		)
+		# M7-ζ-2: prefix with the belief icon when the bond has been promoted
+		# (RelationshipBond.latest_belief_kind set by apply_belief_promotion).
+		# Pre-0.9.0-m7z bonds have ``null`` here and fall through to BOND_LINE
+		# so old replay logs / fixtures still render.
+		var belief_icon: String = _belief_icon(entry.get("belief_kind"))
+		if belief_icon != "":
+			lines.append(
+				Strings.LABELS["BOND_LINE_WITH_BELIEF"] % [
+					belief_icon,
+					entry.get("persona", ""),
+					entry.get("affinity", 0.0),
+					entry.get("turns", 0),
+					tail,
+				]
+			)
+		else:
+			lines.append(
+				Strings.LABELS["BOND_LINE"] % [
+					entry.get("persona", ""),
+					entry.get("affinity", 0.0),
+					entry.get("turns", 0),
+					tail,
+				]
+			)
 	return "\n".join(lines)
+
+
+func _belief_icon(belief_kind: Variant) -> String:
+	# Empty string when the bond has no belief promotion yet — the caller
+	# falls back to the icon-less BOND_LINE in that case.
+	if belief_kind == null:
+		return ""
+	var kind := str(belief_kind)
+	if kind == "":
+		return ""
+	var key := "BELIEF_ICON_%s" % kind.to_upper()
+	if Strings.LABELS.has(key):
+		return Strings.LABELS[key]
+	return ""
 
 
 func _compare_relationship_rank(a: Dictionary, b: Dictionary) -> bool:

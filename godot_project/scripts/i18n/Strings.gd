@@ -59,4 +59,18 @@ const LABELS: Dictionary = {
 	"PERSONA_SUMMARY_RIKYU": "静謐・侘び寂び — 沈黙と所作に意味を宿す",
 	"PERSONA_NAME_UNKNOWN": "(未知のペルソナ)",
 	"PERSONA_SUMMARY_UNKNOWN": "—",
+	# Belief icons (M7-ζ-2). Surfaced as a prefix on the bond row when
+	# RelationshipBond.latest_belief_kind is non-null. Glyphs are universal
+	# but kept here so the JP/EN flip can swap them out later.
+	"BELIEF_ICON_TRUST": "◯",
+	"BELIEF_ICON_CLASH": "✕",
+	"BELIEF_ICON_WARY": "△",
+	"BELIEF_ICON_CURIOUS": "？",
+	"BELIEF_ICON_AMBIVALENT": "◇",
+	# ``BOND_LINE_WITH_BELIEF`` consumes [icon, persona, affinity, turns, tail].
+	"BOND_LINE_WITH_BELIEF": "%s %s  親和度 %+.2f  (%d 回, %s)",
+	# Reflection list (M7-ζ-2). Up to last 3 reflections kept on screen,
+	# newest first, so the researcher can read short reflection cadence
+	# without opening the journal. ``REFLECTION_LINE`` consumes [tick, text].
+	"REFLECTION_LINE": "tick %d: %s",
 }
