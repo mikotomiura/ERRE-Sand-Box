@@ -41,7 +41,7 @@ from pydantic import BaseModel, ConfigDict, Field
 # §1 Protocol constants
 # =============================================================================
 
-SCHEMA_VERSION: Final[str] = "0.6.0-m7g"
+SCHEMA_VERSION: Final[str] = "0.7.0-m7d"
 """Semantic version of the wire contract.
 
 Bumped whenever any on-wire model gains or loses a field, or a discriminator
@@ -83,6 +83,26 @@ required because ``HandshakeMsg`` does a strict version match in
 ``integration/gateway.py`` and will reject 0.5.0-m8 peers against a
 0.6.0-m7g gateway. See ``.steering/20260425-m7-slice-gamma/`` and the
 ``zany-gathering-teapot`` plan file for the rationale.
+
+M7δ bump (0.6.0-m7g → 0.7.0-m7d): three additive field additions tied to
+the Slice δ relationship-loop work (CSDG semi-formula + negative affinity +
+2-layer memory bridge). On :class:`RelationshipBond`, the new
+``last_interaction_zone: Zone | None`` (§4) records *where* a dyad most
+recently interacted so the Godot ``ReasoningPanel`` can render
+``"<persona> affinity ±0.NN (N turns, last in <zone> @ tick T)"``. On
+:class:`SemanticMemoryRecord`, two new fields support the belief-promotion
+bridge: ``belief_kind: Literal["trust","clash","wary","curious","ambivalent"]
+| None`` (typed enum so m8-affinity-dynamics Critics can query
+``WHERE belief_kind='clash'`` without parsing summary prefixes) and
+``confidence: float`` (derivative of ``|affinity| / AFFINITY_UPPER``,
+clamped to [0,1] at the write site). Both default to None / 1.0 so older
+M7γ producers remain wire-compatible. The ``semantic_memory`` SQLite table
+gains two columns via the ``_migrate_semantic_schema`` idempotent migration
+pattern at ``memory/store.py``. ``RelationshipBond`` lives in
+:class:`AgentState` (in-memory, ``model_copy`` mutation), not in a SQLite
+table, so no DB migration is required for the bond field. See
+``.steering/20260426-m7-slice-delta/design-final.md`` and the
+``m7-slice-compressed-teapot`` plan file for the rationale.
 
 M8 bump (0.4.0-m6 → 0.5.0-m8): adds :class:`EpochPhase` (§2) and
 :class:`RunLifecycleState` (§4.5) for the two-phase methodology adopted in
@@ -437,6 +457,15 @@ class RelationshipBond(BaseModel):
     familiarity: _Unit = 0.0
     ichigo_ichie_count: int = Field(default=0, ge=0)
     last_interaction_tick: int | None = Field(default=None, ge=0)
+    last_interaction_zone: Zone | None = Field(
+        default=None,
+        description=(
+            "Zone where the most recent dyad interaction occurred. M7δ-added; "
+            "older bonds (pre-0.7.0-m7d) deserialise as None. Written by "
+            "``WorldRuntime.apply_affinity_delta`` and read by Godot's "
+            "``ReasoningPanel`` to render ``'last in <zone>'`` next to affinity."
+        ),
+    )
 
 
 class AgentState(BaseModel):
@@ -776,6 +805,37 @@ class SemanticMemoryRecord(BaseModel):
     origin_reflection_id: str | None = Field(
         default=None,
         description="``ReflectionEvent`` this row was distilled from, if any.",
+    )
+    belief_kind: (
+        Literal[
+            "trust",
+            "clash",
+            "wary",
+            "curious",
+            "ambivalent",
+        ]
+        | None
+    ) = Field(
+        default=None,
+        description=(
+            "Typed classification of the belief this record represents (M7δ). "
+            "Set when ``cognition/belief.py::maybe_promote_belief`` distils a "
+            "RelationshipBond past the ``|affinity|`` × interaction-count "
+            "threshold; left None for non-belief reflections distilled by "
+            "``cognition/reflection.py``. m8-affinity-dynamics Critics query "
+            "``WHERE belief_kind='clash'`` etc. without parsing summary text."
+        ),
+    )
+    confidence: float = Field(
+        default=1.0,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Belief strength in [0,1]. Defaults to 1.0 for legacy rows and for "
+            "non-belief semantic records (where the field is unused). "
+            "Belief-promotion path computes "
+            "``min(1.0, |affinity|/AFFINITY_UPPER * (interactions/min_interactions))``."
+        ),
     )
     created_at: datetime = Field(default_factory=_utc_now)
 

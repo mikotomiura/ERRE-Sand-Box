@@ -80,6 +80,8 @@ def make_semantic_record() -> Callable[..., SemanticMemoryRecord]:
         embedding: list[float] | None = None,
         summary: str = "Reflected: peripatos is a DMN activator.",
         origin_reflection_id: str | None = "rf_0001",
+        belief_kind: str | None = None,
+        confidence: float = 1.0,
         created_at: datetime | None = None,
     ) -> SemanticMemoryRecord:
         return SemanticMemoryRecord(
@@ -88,6 +90,8 @@ def make_semantic_record() -> Callable[..., SemanticMemoryRecord]:
             embedding=embedding if embedding is not None else [],
             summary=summary,
             origin_reflection_id=origin_reflection_id,
+            belief_kind=belief_kind,  # type: ignore[arg-type]
+            confidence=confidence,
             created_at=created_at or datetime.now(tz=UTC),
         )
 

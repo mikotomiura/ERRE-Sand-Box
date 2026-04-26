@@ -151,7 +151,9 @@ class MemoryStore:
                         last_recalled_at TEXT,
                         recall_count INTEGER NOT NULL DEFAULT 0,
                         tags TEXT NOT NULL DEFAULT '[]',
-                        origin_reflection_id TEXT
+                        origin_reflection_id TEXT,
+                        belief_kind TEXT,
+                        confidence REAL NOT NULL DEFAULT 1.0
                     )
                     """,
                 )
@@ -259,13 +261,19 @@ class MemoryStore:
 
     @staticmethod
     def _migrate_semantic_schema(conn: sqlite3.Connection) -> None:
-        """Idempotently ensure ``semantic_memory.origin_reflection_id`` exists.
+        """Idempotently ensure ``semantic_memory`` carries M4 + M7δ columns.
 
-        Added by m4-memory-semantic-layer. New DBs receive the column via
-        ``CREATE TABLE``; existing DBs (e.g. a ``var/kant.db`` carried over
-        from the M2 milestone) reach here without the column, so we apply
-        ``ALTER TABLE`` on demand. Idempotent: re-running ``create_schema()``
-        is a no-op once the column is present.
+        M4 (m4-memory-semantic-layer): adds ``origin_reflection_id`` so a
+        promoted semantic record links back to its source ``ReflectionEvent``.
+
+        M7δ (m7-slice-delta): adds ``belief_kind`` (typed enum classification
+        for belief-promotion records) and ``confidence`` (real-valued belief
+        strength in [0,1]). New DBs receive these via ``CREATE TABLE`` above;
+        existing DBs (e.g. an M4-era ``var/kant.db``) reach here without the
+        columns and we apply ``ALTER TABLE ADD COLUMN`` on demand.
+
+        Idempotent: re-running ``create_schema()`` is a no-op once each
+        column is present.
         """
         existing = {
             row["name"] for row in conn.execute("PRAGMA table_info(semantic_memory)")
@@ -273,6 +281,19 @@ class MemoryStore:
         if "origin_reflection_id" not in existing:
             conn.execute(
                 "ALTER TABLE semantic_memory ADD COLUMN origin_reflection_id TEXT",
+            )
+        if "belief_kind" not in existing:
+            conn.execute(
+                "ALTER TABLE semantic_memory ADD COLUMN belief_kind TEXT",
+            )
+        if "confidence" not in existing:
+            # SQLite ALTER TABLE ADD COLUMN with a DEFAULT applies the default
+            # to existing rows as well, preserving the contract that legacy
+            # rows read back with confidence=1.0 to match the schemas.py
+            # default.
+            conn.execute(
+                "ALTER TABLE semantic_memory ADD COLUMN "
+                "confidence REAL NOT NULL DEFAULT 1.0",
             )
 
     async def close(self) -> None:
@@ -646,8 +667,9 @@ class MemoryStore:
                 conn.execute(
                     "INSERT OR REPLACE INTO semantic_memory("
                     "id, agent_id, content, importance, created_at, "
-                    "last_recalled_at, recall_count, tags, origin_reflection_id"
-                    ") VALUES (?,?,?,?,?,?,?,?,?)",
+                    "last_recalled_at, recall_count, tags, "
+                    "origin_reflection_id, belief_kind, confidence"
+                    ") VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                     (
                         record.id,
                         record.agent_id,
@@ -658,6 +680,8 @@ class MemoryStore:
                         0,
                         "[]",
                         record.origin_reflection_id,
+                        record.belief_kind,
+                        record.confidence,
                     ),
                 )
                 # The ``vec0`` virtual table does not support INSERT OR REPLACE
@@ -1020,6 +1044,8 @@ def _semantic_row_to_record(
         embedding=embedding,
         summary=row["content"],
         origin_reflection_id=row["origin_reflection_id"],
+        belief_kind=row["belief_kind"],
+        confidence=row["confidence"] if row["confidence"] is not None else 1.0,
         created_at=_text_to_dt(row["created_at"]),
     )
 

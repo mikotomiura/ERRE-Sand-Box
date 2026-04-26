@@ -37,6 +37,7 @@ from erre_sandbox.schemas import (
     Physical,
     Position,
     ReflectionEvent,
+    RelationshipBond,
     RunLifecycleState,
     SamplingBase,
     SamplingDelta,
@@ -377,7 +378,7 @@ def test_schema_version_is_current_milestone() -> None:
     Pin is intentionally reusable: each milestone bump updates this literal
     together with the ``schema_version`` check in ``test_schemas_m{N}.py``.
     """
-    assert SCHEMA_VERSION == "0.6.0-m7g"
+    assert SCHEMA_VERSION == "0.7.0-m7d"
 
 
 def test_agent_spec_validates_minimal_shape() -> None:
@@ -436,6 +437,87 @@ def test_semantic_memory_record_round_trip_with_embedding() -> None:
     )
     re_loaded = SemanticMemoryRecord.model_validate_json(record.model_dump_json())
     assert re_loaded == record
+
+
+# =========================================================================
+# M7δ — additive surface (RelationshipBond.last_interaction_zone +
+# SemanticMemoryRecord.belief_kind + SemanticMemoryRecord.confidence)
+# =========================================================================
+
+
+def test_relationship_bond_defaults_have_no_zone() -> None:
+    """Pre-M7δ bonds (constructed without ``last_interaction_zone``) load as None."""
+    bond = RelationshipBond(other_agent_id="a_nietzsche_001")
+    assert bond.last_interaction_zone is None
+    assert bond.affinity == 0.0
+    assert bond.last_interaction_tick is None
+
+
+def test_relationship_bond_round_trip_with_zone() -> None:
+    """``last_interaction_zone`` round-trips through JSON."""
+    bond = RelationshipBond(
+        other_agent_id="a_rikyu_001",
+        affinity=0.4,
+        familiarity=0.6,
+        ichigo_ichie_count=3,
+        last_interaction_tick=120,
+        last_interaction_zone=Zone.CHASHITSU,
+    )
+    re_loaded = RelationshipBond.model_validate_json(bond.model_dump_json())
+    assert re_loaded == bond
+    assert re_loaded.last_interaction_zone is Zone.CHASHITSU
+
+
+def test_relationship_bond_rejects_unknown_zone() -> None:
+    with pytest.raises(ValidationError):
+        RelationshipBond.model_validate(
+            {"other_agent_id": "a", "last_interaction_zone": "valhalla"},
+        )
+
+
+def test_semantic_memory_record_belief_fields_default_to_none_and_one() -> None:
+    record = SemanticMemoryRecord(
+        id="sm1",
+        agent_id="a_kant_001",
+        summary="Pre-M7δ reflection.",
+    )
+    assert record.belief_kind is None
+    assert record.confidence == 1.0
+
+
+def test_semantic_memory_record_round_trip_with_belief_kind() -> None:
+    """``belief_kind`` × ``confidence`` round-trip and stay typed."""
+    record = SemanticMemoryRecord(
+        id="sm_belief_1",
+        agent_id="a_kant_001",
+        summary="belief: I clash with Friedrich Nietzsche",
+        origin_reflection_id="rf_kant_007",
+        belief_kind="clash",
+        confidence=0.7,
+    )
+    re_loaded = SemanticMemoryRecord.model_validate_json(record.model_dump_json())
+    assert re_loaded == record
+    assert re_loaded.belief_kind == "clash"
+    assert re_loaded.confidence == pytest.approx(0.7)
+
+
+def test_semantic_memory_record_rejects_unknown_belief_kind() -> None:
+    with pytest.raises(ValidationError):
+        SemanticMemoryRecord.model_validate(
+            {
+                "id": "x",
+                "agent_id": "a",
+                "summary": "s",
+                "belief_kind": "rival",  # not in the Literal set
+            },
+        )
+
+
+def test_semantic_memory_record_rejects_confidence_out_of_range() -> None:
+    with pytest.raises(ValidationError):
+        SemanticMemoryRecord.model_validate(
+            {"id": "x", "agent_id": "a", "summary": "s", "confidence": 1.5},
+        )
 
 
 def _dialog_envelope_cases() -> list[tuple[str, dict[str, object], type[BaseModel]]]:
