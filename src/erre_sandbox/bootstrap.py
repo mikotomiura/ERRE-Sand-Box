@@ -27,6 +27,7 @@ import uvicorn
 import yaml
 
 from erre_sandbox.cognition import BiasFiredEvent, CognitionCycle
+from erre_sandbox.cognition.belief import maybe_promote_belief
 from erre_sandbox.cognition.relational import compute_affinity_delta
 from erre_sandbox.erre import ZONE_TO_DEFAULT_ERRE_MODE, DefaultERREModePolicy
 from erre_sandbox.inference import OllamaChatClient
@@ -184,6 +185,53 @@ def _build_initial_state(spec: AgentSpec, persona: PersonaSpec) -> AgentState:
     )
 
 
+def _maybe_persist_belief(
+    *,
+    runtime: WorldRuntime,
+    memory: MemoryStore,
+    agent_id: str,
+    other_agent_id: str,
+    persona: PersonaSpec,
+    addressee_persona: PersonaSpec,
+    turn: DialogTurnMsg,
+) -> None:
+    """Bridge bond mutation → SemanticMemoryRecord upsert when belief gates pass.
+
+    Pure check delegated to ``cognition.belief.maybe_promote_belief``. The
+    sync upsert call lives here (not in tick.py) so the architecture rule
+    that ``world/`` does not import ``memory/`` is preserved. Failures
+    are logged at warning level — the relational sink is fire-and-forget
+    and the cognition cycle must not stall on a semantic-table write.
+    """
+    rt = runtime._agents.get(agent_id)  # noqa: SLF001 — sink-internal access
+    if rt is None:
+        return
+    bond = next(
+        (b for b in rt.state.relationships if b.other_agent_id == other_agent_id),
+        None,
+    )
+    if bond is None:
+        return
+    record = maybe_promote_belief(
+        bond,
+        agent_id=agent_id,
+        persona=persona,
+        addressee_persona=addressee_persona,
+    )
+    if record is None:
+        return
+    try:
+        memory._upsert_semantic_sync(record)  # noqa: SLF001 — sink-internal sync hook
+    except sqlite3.OperationalError as exc:
+        logger.warning(
+            "[bootstrap] belief upsert failed for agent=%s other=%s tick=%d: %s",
+            agent_id,
+            other_agent_id,
+            turn.tick,
+            exc,
+        )
+
+
 def _make_relational_sink(
     *,
     runtime: WorldRuntime,
@@ -298,6 +346,31 @@ def _make_relational_sink(
             tick=turn.tick,
             zone=interaction_zone,
         )
+        # M7δ: belief promotion bridge (CSDG 2-layer memory). Each side's
+        # post-mutation bond may now satisfy the |affinity| × N gates and
+        # graduate to a typed SemanticMemoryRecord. Pure-function check
+        # in ``cognition.belief`` keeps the layer boundary intact; the
+        # sync upsert is owned here so the relational sink stays a single
+        # synchronous unit.
+        if addressee_persona is not None:
+            _maybe_persist_belief(
+                runtime=runtime,
+                memory=memory,
+                agent_id=turn.speaker_id,
+                other_agent_id=turn.addressee_id,
+                persona=speaker_persona,
+                addressee_persona=addressee_persona,
+                turn=turn,
+            )
+            _maybe_persist_belief(
+                runtime=runtime,
+                memory=memory,
+                agent_id=turn.addressee_id,
+                other_agent_id=turn.speaker_id,
+                persona=addressee_persona,
+                addressee_persona=speaker_persona,
+                turn=turn,
+            )
 
     return _persist_relational_event
 

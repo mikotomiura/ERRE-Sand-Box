@@ -35,9 +35,16 @@ from typing import Final
 # the delta lands clearly in the negative region. -0.30 is the calibrated
 # magnitude from .steering/20260426-m7-slice-delta/design-final.md (Axis 2).
 _TRAIT_ANTAGONISM: Final[dict[tuple[str, str], float]] = {
-    ("kant", "nietzsche"): -0.30,
-    ("nietzsche", "kant"): -0.30,
+    ("kant", "nietzsche"): -0.10,
+    ("nietzsche", "kant"): -0.10,
 }
+"""Calibrated against the M7δ formula tunables in ``relational.py``: with
+extraversion-coupled weight 0.5-1.5 a single antagonism turn contributes
+``-0.05 to -0.15`` to ``next_affinity``, well past the
+``_NEGATIVE_DELTA_TRIGGER`` (``-0.05``) that fires the
+``Physical.emotional_conflict`` write at ``world/tick.py``. Saturating
+the kant↔nietzsche dyad past ``|affinity| > 0.45`` then takes ~6-8
+turns — inside the live G-GEAR window."""
 
 
 def lookup_antagonism(

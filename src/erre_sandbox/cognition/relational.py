@@ -69,8 +69,17 @@ _WEIGHT_BASE: Final[float] = 0.5
 _WEIGHT_EXTRA_COEFF: Final[float] = 1.0
 _IMPACT_LENGTH_TARGET: Final[int] = 200
 """Utterance length (in characters) at which ``length_norm`` saturates to 1.0."""
-_IMPACT_ADDRESSEE_WEIGHT: Final[float] = 0.6
-_IMPACT_LENGTH_WEIGHT: Final[float] = 0.4
+_IMPACT_ADDRESSEE_WEIGHT: Final[float] = 0.08
+_IMPACT_LENGTH_WEIGHT: Final[float] = 0.04
+"""Per-turn structural impact coefficients (M7δ Axis 1b calibration).
+
+Sized so a single high-engagement turn contributes
+``≈ 0.08 + 0.04 = 0.12`` to ``event_impact``. Together with the
+extraversion-coupled weight (range 0.5-1.5) this yields per-turn deltas
+around 0.06-0.18, so the recurrence ``next = prev*(1-decay) + impact*weight``
+saturates past the belief-promotion threshold (``0.45``) around turn 7-12
+for non-antagonistic dyads. The matching simulation regression test
+lives at ``tests/test_cognition/test_relational_simulation.py``."""
 
 
 def clamp_affinity_delta(delta: float) -> float:
