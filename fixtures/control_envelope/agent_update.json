@@ -1,5 +1,5 @@
 {
-  "schema_version": "0.6.0-m7g",
+  "schema_version": "0.7.0-m7d",
   "tick": 42,
   "sent_at": "2026-04-18T12:00:00Z",
   "kind": "agent_update",

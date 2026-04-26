@@ -151,7 +151,9 @@ class MemoryStore:
                         last_recalled_at TEXT,
                         recall_count INTEGER NOT NULL DEFAULT 0,
                         tags TEXT NOT NULL DEFAULT '[]',
-                        origin_reflection_id TEXT
+                        origin_reflection_id TEXT,
+                        belief_kind TEXT,
+                        confidence REAL NOT NULL DEFAULT 1.0
                     )
                     """,
                 )
@@ -259,13 +261,19 @@ class MemoryStore:
 
     @staticmethod
     def _migrate_semantic_schema(conn: sqlite3.Connection) -> None:
-        """Idempotently ensure ``semantic_memory.origin_reflection_id`` exists.
+        """Idempotently ensure ``semantic_memory`` carries M4 + M7δ columns.
 
-        Added by m4-memory-semantic-layer. New DBs receive the column via
-        ``CREATE TABLE``; existing DBs (e.g. a ``var/kant.db`` carried over
-        from the M2 milestone) reach here without the column, so we apply
-        ``ALTER TABLE`` on demand. Idempotent: re-running ``create_schema()``
-        is a no-op once the column is present.
+        M4 (m4-memory-semantic-layer): adds ``origin_reflection_id`` so a
+        promoted semantic record links back to its source ``ReflectionEvent``.
+
+        M7δ (m7-slice-delta): adds ``belief_kind`` (typed enum classification
+        for belief-promotion records) and ``confidence`` (real-valued belief
+        strength in [0,1]). New DBs receive these via ``CREATE TABLE`` above;
+        existing DBs (e.g. an M4-era ``var/kant.db``) reach here without the
+        columns and we apply ``ALTER TABLE ADD COLUMN`` on demand.
+
+        Idempotent: re-running ``create_schema()`` is a no-op once each
+        column is present.
         """
         existing = {
             row["name"] for row in conn.execute("PRAGMA table_info(semantic_memory)")
@@ -273,6 +281,19 @@ class MemoryStore:
         if "origin_reflection_id" not in existing:
             conn.execute(
                 "ALTER TABLE semantic_memory ADD COLUMN origin_reflection_id TEXT",
+            )
+        if "belief_kind" not in existing:
+            conn.execute(
+                "ALTER TABLE semantic_memory ADD COLUMN belief_kind TEXT",
+            )
+        if "confidence" not in existing:
+            # SQLite ALTER TABLE ADD COLUMN with a DEFAULT applies the default
+            # to existing rows as well, preserving the contract that legacy
+            # rows read back with confidence=1.0 to match the schemas.py
+            # default.
+            conn.execute(
+                "ALTER TABLE semantic_memory ADD COLUMN "
+                "confidence REAL NOT NULL DEFAULT 1.0",
             )
 
     async def close(self) -> None:
@@ -646,8 +667,9 @@ class MemoryStore:
                 conn.execute(
                     "INSERT OR REPLACE INTO semantic_memory("
                     "id, agent_id, content, importance, created_at, "
-                    "last_recalled_at, recall_count, tags, origin_reflection_id"
-                    ") VALUES (?,?,?,?,?,?,?,?,?)",
+                    "last_recalled_at, recall_count, tags, "
+                    "origin_reflection_id, belief_kind, confidence"
+                    ") VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                     (
                         record.id,
                         record.agent_id,
@@ -658,6 +680,8 @@ class MemoryStore:
                         0,
                         "[]",
                         record.origin_reflection_id,
+                        record.belief_kind,
+                        record.confidence,
                     ),
                 )
                 # The ``vec0`` virtual table does not support INSERT OR REPLACE
@@ -837,13 +861,33 @@ class MemoryStore:
         self,
         *,
         persona: str | None = None,
+        exclude_persona: str | None = None,
         since: datetime | None = None,
+        limit: int | None = None,
     ) -> Iterator[dict[str, object]]:
-        """Yield dialog turn rows as plain dicts, oldest first.
+        """Yield dialog turn rows as plain dicts.
 
-        ``persona`` filters by ``speaker_persona_id`` (addressee is not
-        matched — export is speaker-scoped for LoRA training-data semantics).
-        ``since`` filters by ``created_at >= since``.
+        Filters:
+
+        * ``persona`` — match ``speaker_persona_id = ?`` (export is
+          speaker-scoped for LoRA training-data semantics).
+        * ``exclude_persona`` — match ``speaker_persona_id != ?``. Added
+          for the M7δ ``_fetch_recent_peer_turns`` hot path so the SQLite
+          side can drop the speaker's own turns without a Python-side scan
+          (R3 H3 SQL push). Mutually compatible with ``persona``.
+        * ``since`` — match ``created_at >= since``.
+
+        Ordering / size:
+
+        * Default (``limit is None``): rows are emitted **oldest first**
+          (``created_at ASC, turn_index ASC``). This preserves the export
+          CLI semantics that pre-date M7δ.
+        * ``limit`` set: the SQL flips to ``ORDER BY ... DESC LIMIT ?`` so
+          the **most recent N rows** are returned. Callers that want
+          chronological order should reverse the result. This shape lets
+          ``_fetch_recent_peer_turns`` push the recency cutoff into SQLite
+          (no full-table scan) while the export CLI keeps its old
+          unbounded ASC iteration when ``limit`` is omitted.
 
         Returns plain dicts (not :class:`DialogTurnMsg`) so the export CLI
         can emit rows that include the resolved ``speaker_persona_id`` /
@@ -856,17 +900,25 @@ class MemoryStore:
             if persona is not None:
                 clauses.append("speaker_persona_id = ?")
                 params.append(persona)
+            if exclude_persona is not None:
+                clauses.append("speaker_persona_id != ?")
+                params.append(exclude_persona)
             if since is not None:
                 clauses.append("created_at >= ?")
                 params.append(_dt_to_text(since))
             where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+            order_dir = "DESC" if limit is not None else "ASC"
+            limit_sql = " LIMIT ?" if limit is not None else ""
+            if limit is not None:
+                params.append(int(limit))
             sql = (
                 "SELECT id, dialog_id, tick, turn_index, "
                 "speaker_agent_id, speaker_persona_id, "
                 "addressee_agent_id, addressee_persona_id, "
                 "utterance, created_at "
                 f"FROM dialog_turns {where} "
-                "ORDER BY created_at ASC, turn_index ASC"
+                f"ORDER BY created_at {order_dir}, turn_index {order_dir}"
+                f"{limit_sql}"
             )
             rows = conn.execute(sql, params).fetchall()
         for row in rows:
@@ -1020,6 +1072,8 @@ def _semantic_row_to_record(
         embedding=embedding,
         summary=row["content"],
         origin_reflection_id=row["origin_reflection_id"],
+        belief_kind=row["belief_kind"],
+        confidence=row["confidence"] if row["confidence"] is not None else 1.0,
         created_at=_text_to_dt(row["created_at"]),
     )
 

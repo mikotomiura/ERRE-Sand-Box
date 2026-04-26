@@ -216,11 +216,19 @@ func _on_agent_updated(agent_id: String, agent_state: Dictionary) -> void:
 
 
 func _format_relationships(bonds: Array) -> String:
-	# Render the top 2 bonds as one line each, format:
+	# Render the top 2 bonds as one line each. M7γ format was:
 	#   ``<persona> affinity ±0.NN (N turns, last @ tick T)``
+	# M7δ extends the trailing parenthetical with ``last in <zone>`` when
+	# the bond carries a ``last_interaction_zone`` (the new bond field
+	# added in C1). The full format is now:
+	#   ``<persona> affinity ±0.NN (N turns, last in <zone> @ tick T)``
+	# Falls back to the M7γ shape when the field is missing or null so
+	# pre-δ replay logs / fixtures still render.
+	#
 	# Ranking key: ``|affinity|`` desc, ties broken by ``last_interaction_tick``
 	# desc — the most affectively distinct bonds float to the top, matching
-	# the researcher's observability priority (Slice γ design D5 / R4).
+	# the researcher's observability priority (Slice γ design D5 / R4 +
+	# Slice δ Axis 5).
 	if bonds.is_empty():
 		return "(no peer turns yet)"
 	var ranked: Array = []
@@ -234,12 +242,14 @@ func _format_relationships(bonds: Array) -> String:
 		var affinity: float = float(bond.get("affinity", 0.0))
 		var turns: int = int(bond.get("ichigo_ichie_count", 0))
 		var last_tick_value: Variant = bond.get("last_interaction_tick")
+		var last_zone_value: Variant = bond.get("last_interaction_zone")
 		ranked.append({
 			"other_id": other_id,
 			"persona": _persona_from_agent_id(other_id),
 			"affinity": affinity,
 			"turns": turns,
 			"last_tick": last_tick_value,
+			"last_zone": last_zone_value,
 			"abs_affinity": abs(affinity),
 		})
 	if ranked.is_empty():
@@ -249,9 +259,15 @@ func _format_relationships(bonds: Array) -> String:
 	for entry_value: Variant in ranked.slice(0, 2):
 		var entry: Dictionary = entry_value
 		var last_tick: Variant = entry.get("last_tick")
-		var tail := (
-			"last @ tick %d" % int(last_tick) if last_tick != null else "no tick yet"
-		)
+		var last_zone: Variant = entry.get("last_zone")
+		var tail: String
+		if last_tick != null:
+			if last_zone != null and str(last_zone) != "":
+				tail = "last in %s @ tick %d" % [str(last_zone), int(last_tick)]
+			else:
+				tail = "last @ tick %d" % int(last_tick)
+		else:
+			tail = "no tick yet"
 		lines.append(
 			"%s affinity %+.2f (%d turns, %s)" % [
 				entry.get("persona", ""),

@@ -379,6 +379,96 @@ def test_iter_dialog_turns_filters_by_since(store: MemoryStore) -> None:
     assert len(rows) == 1
 
 
+# ---------------------------------------------------------------------------
+# M7δ — exclude_persona + limit (SQL push for _fetch_recent_peer_turns)
+# ---------------------------------------------------------------------------
+
+
+def test_iter_dialog_turns_excludes_persona(store: MemoryStore) -> None:
+    """``exclude_persona`` drops rows whose speaker matches the value."""
+    for i, persona in enumerate(["kant", "nietzsche", "kant", "rikyu"]):
+        store.add_dialog_turn_sync(
+            _turn(turn_index=i, speaker=f"a_{persona}_001"),
+            speaker_persona_id=persona,
+            addressee_persona_id="nietzsche",
+        )
+    rows = list(store.iter_dialog_turns(exclude_persona="kant"))
+    assert {r["speaker_persona_id"] for r in rows} == {"nietzsche", "rikyu"}
+    assert len(rows) == 2
+
+
+def test_iter_dialog_turns_limit_returns_most_recent_in_desc(
+    store: MemoryStore,
+) -> None:
+    """``limit=N`` returns the N most-recent rows in DESC order."""
+    for i in range(5):
+        store.add_dialog_turn_sync(
+            _turn(turn_index=i),
+            speaker_persona_id="kant",
+            addressee_persona_id="nietzsche",
+        )
+    rows = list(store.iter_dialog_turns(limit=3))
+    # DESC ordering puts the highest turn_index first because added later.
+    assert [r["turn_index"] for r in rows] == [4, 3, 2]
+
+
+def test_iter_dialog_turns_exclude_persona_and_limit_combine(
+    store: MemoryStore,
+) -> None:
+    """exclude_persona + limit together feed the M7δ peer-turn SQL push."""
+    for i in range(6):
+        # Alternate kant / nietzsche so each persona contributes 3 rows.
+        persona = "kant" if i % 2 == 0 else "nietzsche"
+        store.add_dialog_turn_sync(
+            _turn(turn_index=i, speaker=f"a_{persona}_001"),
+            speaker_persona_id=persona,
+            addressee_persona_id="rikyu",
+        )
+    rows = list(store.iter_dialog_turns(exclude_persona="kant", limit=2))
+    # Most-recent two non-kant rows: nietzsche turn_index=5 then 3.
+    assert {r["speaker_persona_id"] for r in rows} == {"nietzsche"}
+    assert [r["turn_index"] for r in rows] == [5, 3]
+
+
+def test_iter_dialog_turns_pushes_filter_and_limit_into_sqlite(
+    store: MemoryStore,
+) -> None:
+    """SQL inspection: WHERE speaker_persona_id != ? and LIMIT ? both emitted.
+
+    Guards against the M7γ regression where filtering happened in Python
+    after a full ``SELECT *`` scan (R3 H3). ``set_trace_callback`` is the
+    supported sqlite3 hook for SQL inspection and shows the statement with
+    parameters already bound (so ``LIMIT 3`` appears literally rather than
+    ``LIMIT ?``). The substituted value still lets us assert the WHERE /
+    ORDER BY / LIMIT shape was pushed into SQLite.
+    """
+    # Seed one row so fetchall has something to return.
+    store.add_dialog_turn_sync(
+        _turn(turn_index=0),
+        speaker_persona_id="nietzsche",
+        addressee_persona_id="kant",
+    )
+    captured: list[str] = []
+
+    real_conn = store._ensure_conn()
+    real_conn.set_trace_callback(captured.append)
+    try:
+        list(store.iter_dialog_turns(exclude_persona="kant", limit=3))
+    finally:
+        real_conn.set_trace_callback(None)
+
+    dialog_sql = [s for s in captured if "FROM dialog_turns" in s]
+    assert len(dialog_sql) == 1, f"expected one dialog_turns query, got {dialog_sql}"
+    sql = dialog_sql[0]
+    # The trace shows bound values inline — accept both 'kant' (quoted by
+    # sqlite) and the param marker if a future sqlite version changes.
+    assert "speaker_persona_id != " in sql
+    assert "'kant'" in sql or "?" in sql
+    assert "ORDER BY created_at DESC" in sql
+    # Limit was pushed; with parameters bound the value 3 appears literally.
+    assert "LIMIT 3" in sql or "LIMIT ?" in sql
+
+
 def test_dialog_turn_count_by_persona_query(store: MemoryStore) -> None:
     """The canonical M9-readiness query returns per-persona turn counts."""
     for i, persona in enumerate(["kant", "kant", "rikyu", "nietzsche", "kant"]):

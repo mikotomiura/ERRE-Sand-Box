@@ -43,8 +43,14 @@ from erre_sandbox.schemas import (
 
 
 def test_schema_version_is_m7g() -> None:
-    """M7γ pinned the wire contract at ``0.6.0-m7g``."""
-    assert SCHEMA_VERSION == "0.6.0-m7g"
+    """M7γ pinned the wire contract; subsequent milestones track current.
+
+    M7γ introduced WorldLayoutMsg + the three ReasoningTrace observability
+    fields. M7δ (this slice) is additive on top of M7γ — the surface this
+    file exercises remains valid against the current SCHEMA_VERSION pin
+    (``0.7.0-m7d``).
+    """
+    assert SCHEMA_VERSION == "0.7.0-m7d"
 
 
 # ---------- §7 WorldLayoutMsg discriminator ----------------------------------
