@@ -110,8 +110,11 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 # S101 は global ignore 済みだが、将来 global から外して tests のみ許容に
 # 切り替える時のセーフティネットとして残している。
-"tests/**" = ["S101", "PLR2004", "D", "ANN", "SLF001", "S311"]
+"tests/**" = ["S101", "PLR2004", "D", "ANN", "SLF001", "S311", "TC003", "ERA001", "PLC0415"]
 "**/__init__.py" = ["F401", "D104"]
+# CLI subcommands intentionally print to stdout/stderr and use argparse
+# Namespace at runtime rather than as a TYPE_CHECKING-only import.
+"src/erre_sandbox/cli/**" = ["T201", "TC003"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Final
 
 from erre_sandbox.bootstrap import BootConfig, bootstrap
-from erre_sandbox.cli import baseline_metrics, export_log
+from erre_sandbox.cli import baseline_metrics, export_log, scaling_metrics
 from erre_sandbox.schemas import AgentSpec, PersonaSpec
 
 try:
@@ -42,7 +42,9 @@ forbids the rest.
 """
 
 
-_SUBCOMMANDS: Final[frozenset[str]] = frozenset({"export-log", "baseline-metrics"})
+_SUBCOMMANDS: Final[frozenset[str]] = frozenset(
+    {"export-log", "baseline-metrics", "scaling-metrics"},
+)
 """Sub-command tokens that divert dispatch away from the default ``run`` path.
 
 Kept as an explicit set so the argv-0 dispatch in :func:`cli` stays a
@@ -115,10 +117,11 @@ def _build_subcommand_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(
         dest="subcommand",
         required=True,
-        metavar="{export-log,baseline-metrics}",
+        metavar="{export-log,baseline-metrics,scaling-metrics}",
     )
     export_log.register(subparsers)
     baseline_metrics.register(subparsers)
+    scaling_metrics.register(subparsers)
     return parser
 
 
@@ -185,6 +188,8 @@ def cli(argv: list[str] | None = None) -> int:
             return export_log.run(args)
         if args.subcommand == "baseline-metrics":
             return baseline_metrics.run(args)
+        if args.subcommand == "scaling-metrics":
+            return scaling_metrics.run(args)
         msg = f"unknown subcommand: {args.subcommand!r}"  # pragma: no cover
         raise SystemExit(msg)
 
