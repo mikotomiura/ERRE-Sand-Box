@@ -508,11 +508,11 @@ async def bootstrap(cfg: BootConfig) -> None:  # noqa: PLR0915, C901 — composi
                 )
                 return
             # M7ε: stamp the live run-lifecycle epoch onto every persisted
-            # turn so ``scaling_metrics.aggregate()`` can drop QA_USER turns
-            # from relational-saturation metrics (M8 D5 / ADR D3). Reading
-            # ``runtime.run_lifecycle`` at sink time makes the value
-            # automatically follow ``transition_to_q_and_a()`` when the
-            # m9-LoRA Q&A driver lands.
+            # turn so ``scaling_metrics.aggregate()`` can drop ``Q_AND_A``
+            # turns from relational-saturation metrics (M8 D5 / ADR D3).
+            # Reading ``runtime.run_lifecycle`` at sink time makes the
+            # value automatically follow ``transition_to_q_and_a()`` when
+            # the m9-LoRA Q&A driver lands.
             memory.add_dialog_turn_sync(
                 turn,
                 speaker_persona_id=speaker_pid,

@@ -211,11 +211,11 @@ class MemoryStore:
                 # turn_index) lets the sink re-fire safely on restart.
                 #
                 # M7ε (m7-slice-epsilon): adds ``epoch_phase`` so M8 ADR D5 /
-                # ``scaling_metrics.aggregate()`` can drop QA_USER turns from
-                # relational-saturation metrics. Pre-migration rows read back
-                # NULL → treated as AUTONOMOUS for backward compat (M7ε D4).
-                # Existing DBs gain the column via ``_migrate_dialog_turns_schema``
-                # below.
+                # ``scaling_metrics.aggregate()`` can drop ``Q_AND_A`` turns
+                # from relational-saturation metrics. Pre-migration rows read
+                # back NULL → treated as AUTONOMOUS for backward compat
+                # (M7ε D4). Existing DBs gain the column via
+                # ``_migrate_dialog_turns_schema`` below.
                 conn.execute(
                     """
                     CREATE TABLE IF NOT EXISTS dialog_turns (
@@ -839,10 +839,10 @@ class MemoryStore:
         call site from the bootstrap agent registry (see decisions D2).
 
         ``epoch_phase`` (M7ε D4): tag the row with the run lifecycle phase
-        so ``scaling_metrics.aggregate()`` can drop QA_USER turns from
-        relational-saturation metrics. Defaults to ``AUTONOMOUS`` so every
-        existing call site (and every M7ε run before the m9-LoRA Q&A
-        driver lands) stamps autonomous without source-side changes.
+        so ``scaling_metrics.aggregate()`` can drop ``Q_AND_A`` turns
+        from relational-saturation metrics. Defaults to ``AUTONOMOUS`` so
+        every existing call site (and every M7ε run before the m9-LoRA
+        Q&A driver lands) stamps autonomous without source-side changes.
 
         Idempotent via ``INSERT OR IGNORE`` on the ``UNIQUE(dialog_id,
         turn_index)`` constraint — re-emitting the same turn after a restart

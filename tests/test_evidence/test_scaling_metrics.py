@@ -513,8 +513,8 @@ def test_aggregate_supports_probe_wrapped_envelope(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_aggregate_filters_qa_user_turns(tmp_path: Path) -> None:
-    """``aggregate()`` only sees AUTONOMOUS turns; Q_AND_A turns are dropped.
+def test_aggregate_filters_q_and_a_turns(tmp_path: Path) -> None:
+    """``aggregate()`` only sees AUTONOMOUS turns; ``Q_AND_A`` turns are dropped.
 
     Seed 6 AUTONOMOUS turns (which alone yield well-defined M1/M2 metrics)
     and 6 Q_AND_A turns. After the M7ε filter, the metric values must

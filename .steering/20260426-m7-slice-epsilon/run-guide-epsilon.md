@@ -69,14 +69,18 @@ Wait until the orchestrator reports the WS gateway is listening on
 ## Step 3 — Envelope probe (terminal B)
 
 The δ run-guide post-run-02 update fixed ``--duration`` to 360s
-minimum. Reuse the δ ``_stream_probe_m7d.py`` script — its envelope
-schema is unchanged in M7ε (only the persisted ``dialog_turns.epoch_phase``
-column moves, the wire shape stays at 0.7-style envelopes plus the
-new schema_version string).
+minimum. **Use the ε-namespaced probe** ``_stream_probe_m7e.py`` (a
+copy of the δ probe with ``SCHEMA_VERSION`` imported from
+``erre_sandbox.schemas`` rather than hardcoded — the δ sibling
+``_stream_probe_m7d.py`` would reject the handshake after the
+0.7→0.8 bump). The envelope schema is otherwise unchanged in M7ε:
+only the persisted ``dialog_turns.epoch_phase`` column moves, the
+wire shape stays at 0.7-style envelopes plus the new schema_version
+string.
 
 ```bash
 # terminal B — 360s minimum
-uv run python .steering/20260426-m7-slice-delta/evidence/_stream_probe_m7d.py \
+uv run python .steering/20260426-m7-slice-epsilon/evidence/_stream_probe_m7e.py \
   --url ws://localhost:8000/ws/observe \
   --duration 360 \
   --out .steering/20260426-m7-slice-epsilon/run-01-epsilon/run-01.jsonl
@@ -136,7 +140,7 @@ and check each item against the run-02-delta baseline at
 Open ``run-01-epsilon.scaling_metrics.json``:
 
 * ``num_dialog_turns`` matches the δ ``dialog_turns`` count exactly
-  (filter dropped 0 rows because ε does not produce QA_USER turns —
+  (filter dropped 0 rows because ε does not produce ``Q_AND_A`` turns —
   the m9-LoRA Q&A driver does)
 * ``pair_information_gain_bits`` is a real float (not None) given
   num_agents=3 and ≥4 turns
@@ -159,7 +163,7 @@ SQL
 Expected output: a single row reading ``autonomous|<n>`` (every turn
 written by the M7ε bootstrap sink stamps AUTONOMOUS via
 ``runtime.run_lifecycle.epoch_phase``). No NULL rows in a fresh DB.
-No QA_USER rows until the m9-LoRA Q&A driver lands.
+No ``Q_AND_A`` rows until the m9-LoRA Q&A driver lands.
 
 ## Step 7 — Land artifacts + verdict
 

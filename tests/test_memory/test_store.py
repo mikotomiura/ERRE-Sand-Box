@@ -595,8 +595,8 @@ def test_add_dialog_turn_stamps_default_autonomous(store: MemoryStore) -> None:
     assert rows[0]["epoch_phase"] == EpochPhase.AUTONOMOUS.value
 
 
-def test_add_dialog_turn_stamps_explicit_qa_user(store: MemoryStore) -> None:
-    """Explicit ``epoch_phase=QA_USER`` is persisted (m9-LoRA producer path)."""
+def test_add_dialog_turn_stamps_explicit_q_and_a(store: MemoryStore) -> None:
+    """Explicit ``epoch_phase=Q_AND_A`` is persisted (m9-LoRA producer path)."""
     from erre_sandbox.schemas import EpochPhase
 
     store.add_dialog_turn_sync(
