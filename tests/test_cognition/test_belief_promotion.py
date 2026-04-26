@@ -133,8 +133,10 @@ def test_min_interactions_override_relaxes_gate() -> None:
     ("affinity", "expected_kind"),
     [
         (0.95, "trust"),
+        (0.70, "trust"),  # R4 M4 — exact ``_TRUST_FLOOR`` boundary; ``>=`` is pass.
         (0.55, "curious"),
         (-0.55, "wary"),
+        (-0.70, "clash"),  # R4 M4 — exact negative ``_TRUST_FLOOR`` boundary.
         (-0.95, "clash"),
     ],
 )
@@ -248,3 +250,65 @@ def test_threshold_constant_consistent_with_module_default() -> None:
         )
         is None
     )
+
+
+# =============================================================================
+# R4 M1 — gate boundary tests (strict-less-than semantics)
+# =============================================================================
+
+
+@pytest.mark.parametrize(
+    ("affinity", "interactions", "should_promote"),
+    [
+        # Exactly at the threshold: ``abs(affinity) < threshold`` is False, so
+        # the gate passes.
+        (BELIEF_THRESHOLD, BELIEF_MIN_INTERACTIONS, True),
+        # One ulp below the threshold: still blocked.
+        (BELIEF_THRESHOLD - 0.001, BELIEF_MIN_INTERACTIONS, False),
+        # Exact negative boundary: same strict-less-than semantics.
+        (-BELIEF_THRESHOLD, BELIEF_MIN_INTERACTIONS, True),
+        # Exactly at the min-interactions floor: ``ichigo_ichie_count <
+        # min_interactions`` is False, so the gate passes.
+        (BELIEF_THRESHOLD + 0.05, BELIEF_MIN_INTERACTIONS, True),
+        # One short of the min-interactions floor: blocked.
+        (BELIEF_THRESHOLD + 0.05, BELIEF_MIN_INTERACTIONS - 1, False),
+    ],
+)
+def test_belief_promotion_at_exact_boundaries(
+    affinity: float,
+    interactions: int,
+    should_promote: bool,  # noqa: FBT001 — parametrised truth target.
+) -> None:
+    """R4 M1 — pin strict-less-than semantics at the exact gate boundaries."""
+    bond = _make_bond(affinity=affinity, ichigo_ichie_count=interactions)
+    record = maybe_promote_belief(
+        bond,
+        agent_id="a_kant_001",
+        persona=_make_persona("kant"),
+        addressee_persona=_make_persona("nietzsche"),
+    )
+    assert (record is not None) == should_promote
+
+
+# =============================================================================
+# R4 M6 — confidence clamp at 1.0
+# =============================================================================
+
+
+def test_confidence_clamps_at_one() -> None:
+    """``min(1.0, ...)`` floor in ``_compute_confidence`` is enforced explicitly.
+
+    R4 M6: ``test_confidence_scales_with_magnitude_and_interactions`` already
+    exercises the clamp incidentally (``0.95 * 2.0 -> 1.0``), but doing so
+    by name self-documents the contract: an arbitrarily large interaction
+    multiplier must not produce ``confidence > 1.0``.
+    """
+    bond = _make_bond(affinity=1.0, ichigo_ichie_count=100)
+    record = maybe_promote_belief(
+        bond,
+        agent_id="a_kant_001",
+        persona=_make_persona("kant"),
+        addressee_persona=_make_persona("nietzsche"),
+    )
+    assert record is not None
+    assert record.confidence == pytest.approx(1.0)
