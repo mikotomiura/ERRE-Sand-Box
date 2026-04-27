@@ -17,7 +17,7 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING, Any
 
-from pytest import approx
+import pytest
 
 from erre_sandbox.world import ManualClock, WorldRuntime
 from erre_sandbox.world.tick import _PROXIMITY_THRESHOLD_M, _SEP_PUSH_M
@@ -76,8 +76,8 @@ async def test_separation_preserves_unit_vector_direction(
     pb = runtime._agents["b"].state.position
     # a is at -X relative to b → pushed further -X by _SEP_PUSH_M.
     # b is at +X relative to a → pushed further +X by _SEP_PUSH_M.
-    assert pa.x == approx(-_SEP_PUSH_M)
-    assert pb.x == approx(1.0 + _SEP_PUSH_M)
+    assert pa.x == pytest.approx(-_SEP_PUSH_M)
+    assert pb.x == pytest.approx(1.0 + _SEP_PUSH_M)
     assert pa.z == 0.0
     assert pb.z == 0.0
 
@@ -134,7 +134,7 @@ async def test_separation_uses_max_of_pair_radii(
     pb = runtime._agents["b"].state.position
     distance = math.hypot(pa.x - pb.x, pa.z - pb.z)
     # 1.3 m + 2 × 0.4 m push = 2.1 m
-    assert distance == approx(1.3 + 2 * _SEP_PUSH_M)
+    assert distance == pytest.approx(1.3 + 2 * _SEP_PUSH_M)
 
 
 async def test_separation_skips_zero_radius_pair(
