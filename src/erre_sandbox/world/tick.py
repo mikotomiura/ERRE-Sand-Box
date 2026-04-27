@@ -104,6 +104,15 @@ deliberately larger than a conversational radius so the FSM can react
 reading of "same room but not yet engaged".
 """
 
+_SEP_PUSH_M: Final[float] = 0.4
+"""Per-tick separation nudge in metres (M7ζ-3).
+
+Sized so two ticks of pushing (0.8 m) is well inside the 1.5 m default
+``separation_radius_m`` *and* well below :data:`_PROXIMITY_THRESHOLD_M`
+(5 m), so dialog-scheduler proximity events are not displaced by
+collapse correction.
+"""
+
 
 _AFFORDANCE_RADIUS_M: Final[float] = 2.0
 """Distance at which an agent is considered to notice a static world prop (M7 B1).
@@ -265,6 +274,17 @@ class AgentRuntime:
     persona: PersonaSpec
     kinematics: Kinematics
     pending: list[Observation] = field(default_factory=list)
+    # M7ζ-3 phase-wheel cognition cadence. The global cognition heap event
+    # still fires every ``_cognition_period`` seconds, but each agent only
+    # actually steps when ``next_cognition_due <= clock.monotonic()`` — so
+    # personas with longer ``cognition_period_s`` skip ticks and personas
+    # with shorter periods step every global tick.
+    next_cognition_due: float = 0.0
+    # M7ζ-3 post-MoveMsg dwell. Set when a MoveMsg fires so the next
+    # ``persona.behavior_profile.dwell_time_s`` seconds suppress cognition
+    # entirely (Rikyū seiza). Phase wheel resumes once the global clock
+    # passes this deadline.
+    dwell_until: float = 0.0
 
 
 @dataclass(slots=True)
@@ -803,6 +823,15 @@ class WorldRuntime:
                         to_zone=zone_changed,
                     ),
                 )
+        # M7ζ-3: pair separation nudge — runs after step_kinematics so it
+        # corrects any pair whose Python orchestrator routed them to
+        # near-identical waypoints before the proximity-event detector
+        # samples distances. Order matters: separation must precede
+        # ``_fire_proximity_events`` so the latter sees the post-nudge
+        # geometry and reports stable enter/leave crossings instead of
+        # oscillating around the threshold every tick.
+        if len(self._agents) >= 2:  # noqa: PLR2004 — "pair" is inherently 2
+            self._apply_separation_force()
         # M6-A-2b: time-of-day cascade — emit a TemporalEvent for every
         # registered agent when the simulated clock crosses a period
         # boundary. No-agent ticks are hot-pathed so ``_time_start`` stays
@@ -823,6 +852,52 @@ class WorldRuntime:
         # (two chashitsu tea bowls in the initial scope).
         if self._agents:
             self._fire_affordance_events()
+
+    def _apply_separation_force(self) -> None:
+        """Nudge agent pairs apart on the XZ plane when distance < radius.
+
+        For each unordered pair, the threshold is the *larger* of the two
+        personas' ``separation_radius_m`` so a tight-bubble persona (e.g.
+        Rikyū's 1.2 m) does not block a wider-bubble peer (Kant 1.5 m)
+        from claiming personal space. When inside the radius both agents
+        receive a fixed :data:`_SEP_PUSH_M` push along the unit vector
+        between them; identical positions (``d == 0``) deterministically
+        fall back to ``(1, 0)`` so the test outcome is reproducible.
+
+        :class:`Kinematics` is kept in sync with :class:`Position` so the
+        next physics tick's ``step_kinematics`` integrates from the
+        post-nudge coordinate; the persisted ``AgentState`` carries the
+        same coordinate so the Godot ``agent_update`` envelope reflects
+        it without any wire-side change.
+
+        Complexity is ``O(n*(n-1)/2)`` over registered agents — fine for
+        the 3-agent MVP scale; revisit if MASTER-PLAN scales agent count.
+        """
+        for rt_a, rt_b in combinations(self._agents.values(), 2):
+            radius = max(
+                rt_a.persona.behavior_profile.separation_radius_m,
+                rt_b.persona.behavior_profile.separation_radius_m,
+            )
+            if radius == 0.0:
+                continue
+            dx = rt_a.state.position.x - rt_b.state.position.x
+            dz = rt_a.state.position.z - rt_b.state.position.z
+            d = math.hypot(dx, dz)
+            if d >= radius:
+                continue
+            if d == 0.0:
+                ux, uz = 1.0, 0.0
+            else:
+                ux, uz = dx / d, dz / d
+            for rt, sign in ((rt_a, +1.0), (rt_b, -1.0)):
+                new_pos = rt.state.position.model_copy(
+                    update={
+                        "x": rt.state.position.x + sign * ux * _SEP_PUSH_M,
+                        "z": rt.state.position.z + sign * uz * _SEP_PUSH_M,
+                    },
+                )
+                rt.state = rt.state.model_copy(update={"position": new_pos})
+                rt.kinematics.position = new_pos
 
     def _fire_proximity_events(self) -> None:
         """Detect agent-pair distance crossings of :data:`_PROXIMITY_THRESHOLD_M`.
@@ -963,16 +1038,45 @@ class WorldRuntime:
     async def _on_cognition_tick(self) -> None:
         if not self._agents:
             return
+        # M7ζ-3 phase wheel: the global cognition heap event still fires at
+        # ``_cognition_period`` cadence, but only agents whose
+        # ``next_cognition_due`` has elapsed (and which are not in
+        # post-MoveMsg dwell) actually step this tick. The 1e-6 tolerance
+        # absorbs floating-point drift between the global heap due time and
+        # the per-agent due time computed from ``cognition_period_s``.
+        now = self._clock.monotonic()
         # Evaluate agents list once so that dict mutation during gather
         # (register_agent from inside a handler, if anyone ever does that)
         # cannot desynchronise the result / runtime pairing below.
         runtimes = list(self._agents.values())
-        results = await asyncio.gather(
-            *(self._step_one(rt) for rt in runtimes),
-            return_exceptions=True,
-        )
-        for rt, res in zip(runtimes, results, strict=True):
-            self._consume_result(rt, res)
+        due: list[AgentRuntime] = []
+        for rt in runtimes:
+            if now < rt.dwell_until:
+                continue  # in seiza dwell, skip this cognition tick
+            if rt.next_cognition_due <= now + 1e-6:
+                due.append(rt)
+        if due:
+            results = await asyncio.gather(
+                *(self._step_one(rt) for rt in due),
+                return_exceptions=True,
+            )
+            for rt, res in zip(due, results, strict=True):
+                self._consume_result(rt, res)
+                # ``cognition_period_s`` is the *minimum* gap between this
+                # agent's cognition steps. ``dwell_until`` (set inside
+                # ``_consume_result`` when a MoveMsg fires) layers an
+                # *upper* override on top: when ``dwell_time_s >
+                # cognition_period_s`` (e.g. Rikyū's 90 s dwell vs 18 s
+                # period) dwell wins, when ``dwell_time_s <
+                # cognition_period_s`` (e.g. Nietzsche's 5 s dwell vs 7 s
+                # period) period still bounds the next step. This is the
+                # intended semantics — dwell never speeds an agent up.
+                rt.next_cognition_due = (
+                    now + rt.persona.behavior_profile.cognition_period_s
+                )
+        # Dialog scheduler runs every global tick regardless of which agents
+        # were due, so persona-driven cognition cadence does not starve
+        # proximity-driven dialog initiations.
         self._run_dialog_tick()
         if self._dialog_generator is not None and self._dialog_scheduler is not None:
             await self._drive_dialog_turns(self._current_world_tick())
@@ -1226,6 +1330,13 @@ class WorldRuntime:
                     )
                     env = env.model_copy(update={"target": resolved})  # noqa: PLW2901 — intentional re-bind to propagate the zone-resolved target to both apply_move_command and the downstream queue
                 apply_move_command(rt.kinematics, env)
+                # M7ζ-3: arm seiza-style dwell so the persona's cognition is
+                # suppressed for ``dwell_time_s`` before the phase wheel
+                # resumes. dwell_time_s == 0.0 (the default) makes this a
+                # no-op, so personas without a dwell tuning are unaffected.
+                dwell = rt.persona.behavior_profile.dwell_time_s
+                if dwell > 0.0:
+                    rt.dwell_until = self._clock.monotonic() + dwell
             self._envelopes.put_nowait(env)
 
     # ----- Scheduling helper -----

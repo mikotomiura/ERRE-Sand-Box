@@ -327,8 +327,14 @@ class TestWorldRuntimeCognition:
 
         task = asyncio.create_task(world_harness.runtime.run())
         await _pump()
-        world_harness.clock.advance(30.0)
-        await _pump(1500)
+        # M7ζ-3 phase wheel: ``_on_cognition_tick`` reads ``clock.monotonic``
+        # at handler entry, so a single ``advance(30.0)`` would fire three
+        # heap events that all see ``now=30`` and only the first would step
+        # (the rest would observe ``next_cognition_due=40 > now``). Advance
+        # in three 10 s increments so each tick gets a fresh ``now``.
+        for _ in range(3):
+            world_harness.clock.advance(10.0)
+            await _pump(500)
         assert len(world_harness.cycle.calls) == 3
         world_harness.runtime.stop()
         world_harness.clock.advance(1.0)
