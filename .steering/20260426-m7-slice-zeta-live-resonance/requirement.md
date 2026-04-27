@@ -218,17 +218,18 @@ F1/F2 は B/C 軸の **次段階要求**、F3 は E1 とは別系統の viewport
   追加は別 slice
 - **A4 (world 拡張 100→160m)** → stretch、PR が肥らないよう Plan で
   決定
-- **F1 (agent 同士の直接会話の視覚化)** → ζ-2 で persona_id wire は届くため、
-  発話の **吹き出し (Label3D) / 字幕 ticker / dialog stream の panel 表示**
-  本体は新タスク `dialog-visualization` に切り出し。dialog_turn payload の
-  WS 経路だけ ζ-2 内で点検し、視覚層は別 slice。
-- **F2 (FPS-style 歩行アニメーション)** → 新タスク
-  `agent-locomotion-animation` に切り出し。AnimationTree state machine と
-  humanoid rigged mesh のセットアップは Blender pipeline (A2/A3) と
-  共依存になりがちなため `world-asset-blender-pipeline` と並走線で扱う。
+- **F1+F2 (agent 同士の直接会話の視覚化 + FPS-style 歩行)** → 新タスク
+  `agent-presence-visualization` に **統合切り出し** (decisions.md D7v2、
+  2026-04-27 事後 /reimagine で v1 から訂正)。「喋りながら歩く」体感単位
+  で意味同一、両者とも MainScene/AgentController shared edit が発生する
+  ため別 PR に分けると merge conflict 連鎖。ζ-2 で wire される
+  persona_id / dialog_turn payload を消費。F2 は placeholder mesh
+  (CapsuleMesh + 簡易 rig) で先行、本格 humanoid rig は
+  `world-asset-blender-pipeline` 着手時に差し替え。
 - **F3 (world viewport の拡張)** → ζ-1 と独立した Godot UI レイアウト調査
   が必要。新タスク `godot-viewport-layout` に切り出し、root scene anchor /
   project window size / ReasoningPanel split ratio を 1 PR で見直す。
+  schema/backend 非依存で 1 PR 最速 land。
 
 ### スコープ外との境界
 
