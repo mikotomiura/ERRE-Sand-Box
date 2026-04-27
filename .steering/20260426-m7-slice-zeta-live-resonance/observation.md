@@ -207,3 +207,40 @@ once the qualitative gate is signed off.
 sessions: gate-6 sign-off → ζ-3 merge → /finish-task ζ slice
 (memory ``project_m7_zeta_merged.md`` + 5 deferred-task scaffold per
 decisions.md D2 / D7v2).
+
+## Final verdict — Mac visual + G-GEAR numeric joint sign-off (2026-04-28)
+
+After mikotomiura's MacBook-side observation (12+ min Godot live with
+the Mac connected to the G-GEAR orchestrator on this same probe
+window), all qualitative gates returned PASS. Combined with the 5
+numeric gates above, the slice is **green for merge**.
+
+### Final 4-checkbox verdict
+
+- [x] **All 5 δ regression gates PASS** — D1 dialog_turns=18 / D2 belief_promotions=2 (kant↔nietzsche clash+wary, conf 1.0) / D3 bonds_zone 127/127 / D4 max_emotional_conflict 0.1954 / D5 affinity 52 pos + 75 neg.
+- [x] **All 5 ζ-3 numerical gates PASS (Z1-Z5)** — Z1 speed histogram 0.910/1.105/1.625 m/s × 16/36/74 events / Z2 cognition tick ratio Nietzsche : Kant : Rikyū = 4.625 : 2.25 : 1 (74:36:16, matches Mac indirect 4.4:2.2:1.0 within snapshot noise) / Z3 collapses=0 (XZ<0.4m for ≥2 consecutive ticks) / Z4 6 enter / 5 leave proximity crossings on kant↔nietzsche, never sustained / Z5 Rikyū MoveMsg wall-clock gap 15/15 ≥ 90s (min 102.6s, max 124.8s, median 110.0s — dwell_time_s=90 confirmed).
+- [x] **ζ-3 qualitative gate Z6 PASS (Mac frames)** — mikotomiura's report of 3/3 personas showing distinct cognitive vocabulary (rikyū 茶道 / kant Tempus & Ratio / nietzsche 永遠回帰 Ewige Wiederkehr) and cross-agent awareness (Nietzsche reflection citing Kant by name) confirms the persona-divergence fingerprint visible in the numeric data materialises in the live Godot viewport.
+- [x] **ζ-1 + ζ-2 V1-V10 PASS (Mac frames, regression-clean)** — V1 day/night ambient transition / V2 selector swap / V3 JP labels / V4 camera tune / V5 no missing-key console errors / V6 persona title / V7 persona summary / V8 belief icon ``△`` (wary) on both sides of kant↔nietzsche / V9 last-3 reflection list / V10 selector switch resets reflection trail.
+
+### Z2 cross-validation — G-GEAR direct vs Mac indirect
+
+| persona | G-GEAR reasoning_trace count / 1800s | Mac indirect ratio reading | match |
+|---|---|---|---|
+| nietzsche | 74 (1 step / 24s) | 4.4 | ratio 4.625 (Δ +0.225 vs 4.4) |
+| kant | 36 (1 step / 50s) | 2.2 | ratio 2.25 (Δ +0.05 vs 2.2) |
+| rikyu | 16 (1 step / 113s) | 1.0 | ratio 1.0 (anchor) |
+
+Difference is within snapshot timing noise (Mac frames sampled at tick=40/52/70). Direct G-GEAR count and Mac-derived ratio agree on **strict ordering** and within ±5 % on magnitude.
+
+### PR-merge note
+
+PR #107 was squash-merged to `main` as commit `820ce88` after Mac-side
+visual sign-off. This final verdict section is committed for record on
+the post-merge branch tip; no further code changes are required for
+ζ-3 acceptance.
+
+Next: ζ slice ``/finish-task`` closure — memory
+``project_m7_zeta_merged.md`` + scaffold the 5 deferred tasks per
+decisions.md D2 / D7v2 (`m9-lora-pre-plan` / `world-asset-blender-pipeline`
+/ `event-boundary-observability` / `agent-presence-visualization` /
+`godot-viewport-layout`).
