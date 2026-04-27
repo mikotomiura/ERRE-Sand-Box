@@ -134,6 +134,9 @@ default_sampling:
 # Slow gait (factor 0.70) + long 18 s cognition period + 90 s dwell ≈ ≥20 min
 # seiza compressed into observable timescale + tight 1.2 m bubble (close
 # proximity is part of the tea ritual).
+# Compression rationale (≥20 min → 90 s) is calibrated against the live
+# observation window in
+# .steering/20260426-m7-slice-zeta-live-resonance/requirement.md §B.
 behavior_profile:
   movement_speed_factor: 0.70
   cognition_period_s: 18.0

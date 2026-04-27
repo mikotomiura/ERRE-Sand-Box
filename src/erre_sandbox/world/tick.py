@@ -105,14 +105,12 @@ reading of "same room but not yet engaged".
 """
 
 _SEP_PUSH_M: Final[float] = 0.4
-"""Per-physics-tick separation nudge in metres (M7ζ-3).
+"""Per-tick separation nudge in metres (M7ζ-3).
 
-Applied to both agents in opposite XZ directions when their distance
-drops below either persona's ``separation_radius_m`` (default 1.5 m,
-clamped ≤ 5.0 m). Stays well inside :data:`_PROXIMITY_THRESHOLD_M` so
-proximity-event enter/leave crossings keep firing as the pair gradually
-spreads apart — the live "3 体が一箇所に collapse する" failure mode is
-removed without breaking the dialog scheduler's proximity wake-up.
+Sized so two ticks of pushing (0.8 m) is well inside the 1.5 m default
+``separation_radius_m`` *and* well below :data:`_PROXIMITY_THRESHOLD_M`
+(5 m), so dialog-scheduler proximity events are not displaced by
+collapse correction.
 """
 
 
@@ -871,6 +869,9 @@ class WorldRuntime:
         post-nudge coordinate; the persisted ``AgentState`` carries the
         same coordinate so the Godot ``agent_update`` envelope reflects
         it without any wire-side change.
+
+        Complexity is ``O(n*(n-1)/2)`` over registered agents — fine for
+        the 3-agent MVP scale; revisit if MASTER-PLAN scales agent count.
         """
         for rt_a, rt_b in combinations(self._agents.values(), 2):
             radius = max(
@@ -1061,6 +1062,15 @@ class WorldRuntime:
             )
             for rt, res in zip(due, results, strict=True):
                 self._consume_result(rt, res)
+                # ``cognition_period_s`` is the *minimum* gap between this
+                # agent's cognition steps. ``dwell_until`` (set inside
+                # ``_consume_result`` when a MoveMsg fires) layers an
+                # *upper* override on top: when ``dwell_time_s >
+                # cognition_period_s`` (e.g. Rikyū's 90 s dwell vs 18 s
+                # period) dwell wins, when ``dwell_time_s <
+                # cognition_period_s`` (e.g. Nietzsche's 5 s dwell vs 7 s
+                # period) period still bounds the next step. This is the
+                # intended semantics — dwell never speeds an agent up.
                 rt.next_cognition_due = (
                     now + rt.persona.behavior_profile.cognition_period_s
                 )

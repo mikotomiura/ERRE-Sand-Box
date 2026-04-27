@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 
-async def test_separation_pushes_apart_from_collapse(
+def test_separation_pushes_apart_from_collapse(
     make_agent_state: Callable[..., Any],
     make_persona_spec: Callable[..., Any],
 ) -> None:
@@ -53,7 +53,7 @@ async def test_separation_pushes_apart_from_collapse(
     assert distance >= 2 * _SEP_PUSH_M
 
 
-async def test_separation_preserves_unit_vector_direction(
+def test_separation_preserves_unit_vector_direction(
     make_agent_state: Callable[..., Any],
     make_persona_spec: Callable[..., Any],
 ) -> None:
@@ -82,7 +82,7 @@ async def test_separation_preserves_unit_vector_direction(
     assert pb.z == 0.0
 
 
-async def test_separation_skips_pairs_outside_radius(
+def test_separation_skips_pairs_outside_radius(
     make_agent_state: Callable[..., Any],
     make_persona_spec: Callable[..., Any],
 ) -> None:
@@ -105,7 +105,7 @@ async def test_separation_skips_pairs_outside_radius(
     assert runtime._agents["b"].state.position.x == 4.5
 
 
-async def test_separation_uses_max_of_pair_radii(
+def test_separation_uses_max_of_pair_radii(
     make_agent_state: Callable[..., Any],
     make_persona_spec: Callable[..., Any],
 ) -> None:
@@ -137,7 +137,7 @@ async def test_separation_uses_max_of_pair_radii(
     assert distance == pytest.approx(1.3 + 2 * _SEP_PUSH_M)
 
 
-async def test_separation_skips_zero_radius_pair(
+def test_separation_skips_zero_radius_pair(
     make_agent_state: Callable[..., Any],
     make_persona_spec: Callable[..., Any],
 ) -> None:
@@ -164,7 +164,7 @@ async def test_separation_skips_zero_radius_pair(
     assert runtime._agents["b"].state.position.x == 0.0
 
 
-async def test_separation_stays_inside_proximity_threshold(
+def test_separation_stays_inside_proximity_threshold(
     make_agent_state: Callable[..., Any],
     make_persona_spec: Callable[..., Any],
 ) -> None:
