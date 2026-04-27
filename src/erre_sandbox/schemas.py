@@ -41,7 +41,7 @@ from pydantic import BaseModel, ConfigDict, Field
 # §1 Protocol constants
 # =============================================================================
 
-SCHEMA_VERSION: Final[str] = "0.8.0-m7e"
+SCHEMA_VERSION: Final[str] = "0.9.0-m7z"
 """Semantic version of the wire contract.
 
 Bumped whenever any on-wire model gains or loses a field, or a discriminator
@@ -116,6 +116,21 @@ wire-compatible. The new ``EpochPhase`` name is deliberately distinct from
 the gateway-layer ``SessionPhase`` at ``integration/protocol.py`` so the two
 orthogonal state machines cannot be confused. See
 ``.steering/20260425-m8-session-phase-model/`` for the rationale.
+
+M7ζ bump (0.8.0-m7e → 0.9.0-m7z): two additive fields tied to the Slice ζ
+"Live Resonance" panel-context work. :class:`ReasoningTrace` gains
+``persona_id: str | None`` so the Godot ``ReasoningPanel`` can render the
+persona identity (display_name + 1-line summary) alongside the per-tick
+trace without joining to ``AgentState`` at the client. :class:`RelationshipBond`
+gains ``latest_belief_kind: Literal[...] | None`` (same value domain as
+:attr:`SemanticMemoryRecord.belief_kind`) so the panel can surface the most
+recent belief classification (trust / clash / wary / curious / ambivalent)
+that was promoted from the dyad's affinity loop, rendered as an icon prefix
+next to the bond row. Both default to ``None`` so older M7ε producers remain
+wire-compatible. The ``relational_memory`` SQLite table is unaffected
+(``RelationshipBond`` is in-memory on :class:`AgentState`). See
+``.steering/20260426-m7-slice-zeta-live-resonance/`` and the
+``eager-churning-hartmanis`` plan file for the rationale.
 
 Compatibility with M6 payloads:
 
@@ -466,6 +481,32 @@ class RelationshipBond(BaseModel):
             "``ReasoningPanel`` to render ``'last in <zone>'`` next to affinity."
         ),
     )
+    latest_belief_kind: (
+        Literal[
+            "trust",
+            "clash",
+            "wary",
+            "curious",
+            "ambivalent",
+        ]
+        | None
+    ) = Field(
+        default=None,
+        description=(
+            "Most-recent typed classification promoted from this bond's "
+            "affinity loop (M7ζ). Same value domain as "
+            ":attr:`SemanticMemoryRecord.belief_kind` — kept here so the "
+            "Godot ``ReasoningPanel`` can render an icon prefix "
+            "(``◯△✕？◇``) next to the bond row without joining to the "
+            "semantic_memory table at every panel refresh. Written by "
+            "``WorldRuntime.apply_belief_promotion`` from the bootstrap "
+            "relational sink the moment ``cognition.belief.maybe_promote_belief`` "
+            "graduates the bond past its ``|affinity| × N`` gates. Older "
+            "bonds (pre-0.9.0-m7z) deserialise as None; once set, the value "
+            "is overwritten only by a subsequent successful promotion of the "
+            "same dyad — an affinity drop below threshold does not clear it."
+        ),
+    )
 
 
 class AgentState(BaseModel):
@@ -738,6 +779,16 @@ class ReasoningTrace(BaseModel):
 
     agent_id: str
     tick: int = Field(..., ge=0)
+    persona_id: str | None = Field(
+        default=None,
+        description=(
+            "Persona this trace belongs to (matches ``PersonaSpec.persona_id``). "
+            "M7ζ-added so the Godot ``ReasoningPanel`` can render the persona "
+            "identity alongside the trace without joining ``AgentState``. Older "
+            "M7ε producers (pre-0.9.0-m7z) deserialise as ``None``; consumers "
+            "must tolerate the missing case and fall back to ``agent_id``."
+        ),
+    )
     mode: ERREModeName
     salient: str | None = Field(
         default=None,

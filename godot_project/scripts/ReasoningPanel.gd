@@ -28,14 +28,26 @@ const Strings = preload("res://scripts/i18n/Strings.gd")
 @export var router_path: NodePath
 
 var _focused_agent: String = ""
+# M7-ζ-2: most-recently observed persona_id for the focused agent — sourced
+# from ``ReasoningTrace.persona_id`` (M7-ζ-2 wire) or ``AgentUpdate.persona_id``
+# (always carried). Cached so the title + summary do not flicker between
+# resolved and "(persona unknown)" when the two streams interleave.
+var _focused_persona_id: String = ""
 var _title_label: Label
 var _mode_label: Label
+var _persona_summary_label: Label
 var _salient_label: Label
 var _decision_label: Label
 var _intent_label: Label
 var _reflection_label: Label
 var _relationships_label: Label
 var _last_reflection_tick: int = -1
+# M7-ζ-2: keep up to ``_RECENT_REFLECTIONS_CAP`` of the most-recent reflection
+# events in tick-descending order. ``_last_reflection_tick`` still stamps the
+# newest seen tick so out-of-order replays do not regress to an older summary
+# (the cap-based dedupe already filters duplicates by exact tick).
+const _RECENT_REFLECTIONS_CAP: int = 3
+var _recent_reflections: Array[Dictionary] = []
 # M7-ζ-1: multi-agent selector. ``_known_agents`` mirrors the OptionButton
 # items 1..N (item 0 stays the placeholder) so SelectionManager click-focus
 # and selector changes can sync without iterating the OptionButton each
@@ -111,6 +123,11 @@ func _build_tree() -> void:
 
 	_title_label = _make_label(vbox, Strings.LABELS["PANEL_TITLE"], 18, Color(0.9, 0.92, 0.95, 1.0))
 	_mode_label = _make_label(vbox, Strings.LABELS["AGENT_NONE"], 12, Color(0.65, 0.75, 0.9, 1.0))
+	# M7-ζ-2: 1-line persona personality summary, sized between mode and
+	# section headers. Hidden until a trace / update gives us a persona_id.
+	_persona_summary_label = _make_label(
+		vbox, Strings.LABELS["PERSONA_SUMMARY_UNKNOWN"], 11, Color(0.75, 0.78, 0.85, 1.0),
+	)
 	vbox.add_child(_make_divider())
 
 	_make_label(vbox, Strings.LABELS["SALIENT"], 11, Color(0.8, 0.7, 0.4, 1.0))
@@ -167,18 +184,56 @@ func set_focused_agent(agent_id: String, _agent_node: Node3D = null) -> void:
 	if agent_id == _focused_agent:
 		return
 	_focused_agent = agent_id
+	_focused_persona_id = ""
 	_salient_label.text = Strings.LABELS["VALUE_DASH"]
 	_decision_label.text = Strings.LABELS["VALUE_DASH"]
 	_intent_label.text = Strings.LABELS["VALUE_DASH"]
 	_reflection_label.text = Strings.LABELS["REFLECTION_NONE"]
 	_relationships_label.text = Strings.LABELS["RELATIONSHIPS_NONE"]
+	_persona_summary_label.text = Strings.LABELS["PERSONA_SUMMARY_UNKNOWN"]
 	_last_reflection_tick = -1
+	_recent_reflections.clear()
 	if agent_id != "":
 		_title_label.text = Strings.LABELS["PANEL_TITLE_FOR_AGENT"] % agent_id
 	else:
 		_title_label.text = Strings.LABELS["PANEL_TITLE"]
 	_mode_label.text = Strings.LABELS["AGENT_WAITING"]
 	_sync_selector_to_focus(agent_id)
+
+
+func _apply_persona_to_title(agent_id: String, persona_id: String) -> void:
+	# M7-ζ-2: upgrade the bare ``Reasoning Panel — <agent_id>`` title to
+	# ``Reasoning Panel — <agent_id> (<display_name>)`` and surface the
+	# 1-line personality summary the moment either ``ReasoningTrace.persona_id``
+	# or ``AgentUpdate.persona_id`` resolves it. Re-entry safe: if the same
+	# persona_id arrives again the labels are already correct.
+	if agent_id == "" or persona_id == "":
+		return
+	if persona_id == _focused_persona_id:
+		return
+	_focused_persona_id = persona_id
+	_title_label.text = Strings.LABELS["PANEL_TITLE_FOR_AGENT_PERSONA"] % [
+		agent_id, _persona_display_name(persona_id),
+	]
+	_persona_summary_label.text = _persona_summary(persona_id)
+
+
+func _persona_display_name(persona_id: String) -> String:
+	if persona_id == "":
+		return Strings.LABELS["PERSONA_NAME_UNKNOWN"]
+	var key := "PERSONA_NAME_%s" % persona_id.to_upper()
+	if Strings.LABELS.has(key):
+		return Strings.LABELS[key]
+	return Strings.LABELS["PERSONA_NAME_UNKNOWN"]
+
+
+func _persona_summary(persona_id: String) -> String:
+	if persona_id == "":
+		return Strings.LABELS["PERSONA_SUMMARY_UNKNOWN"]
+	var key := "PERSONA_SUMMARY_%s" % persona_id.to_upper()
+	if Strings.LABELS.has(key):
+		return Strings.LABELS[key]
+	return Strings.LABELS["PERSONA_SUMMARY_UNKNOWN"]
 
 
 # ---- EnvelopeRouter signal handlers ----
@@ -197,6 +252,12 @@ func _on_reasoning_trace_received(agent_id: String, tick: int, trace: Dictionary
 	_salient_label.text = _coalesce(trace.get("salient"), Strings.LABELS["VALUE_DASH"])
 	_decision_label.text = _coalesce(trace.get("decision"), Strings.LABELS["VALUE_DASH"])
 	_intent_label.text = _coalesce(trace.get("next_intent"), Strings.LABELS["VALUE_DASH"])
+	# M7-ζ-2: persona_id is optional on the wire (None for pre-0.9.0-m7z
+	# producers). Only upgrade the title when the field resolves to a
+	# non-empty string.
+	var persona_value: Variant = trace.get("persona_id")
+	if persona_value != null and str(persona_value) != "":
+		_apply_persona_to_title(agent_id, str(persona_value))
 
 
 func _on_reflection_event_received(
@@ -209,12 +270,42 @@ func _on_reflection_event_received(
 		set_focused_agent(agent_id)
 	if agent_id != _focused_agent:
 		return
-	# Reflection events can arrive out of order after a reconnect; keep the
-	# latest by tick so we never regress to an older summary.
-	if tick < _last_reflection_tick:
-		return
-	_last_reflection_tick = tick
-	_reflection_label.text = summary_text if summary_text != "" else Strings.LABELS["REFLECTION_EMPTY_SUMMARY"]
+	# M7-ζ-2: keep last 3 reflections (tick desc) so the researcher can read
+	# short-term reflection cadence without opening the journal. Out-of-order
+	# replays are still filtered: a tick already in the cache is ignored, and
+	# entries older than the smallest currently held tick are dropped once
+	# the cache is at cap.
+	for entry: Dictionary in _recent_reflections:
+		if int(entry.get("tick", -1)) == tick:
+			return
+	var rendered: String = (
+		summary_text if summary_text != ""
+		else Strings.LABELS["REFLECTION_EMPTY_SUMMARY"]
+	)
+	_recent_reflections.append({"tick": tick, "summary": rendered})
+	_recent_reflections.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return int(a.get("tick", -1)) > int(b.get("tick", -1))
+	)
+	while _recent_reflections.size() > _RECENT_REFLECTIONS_CAP:
+		_recent_reflections.pop_back()
+	if tick > _last_reflection_tick:
+		_last_reflection_tick = tick
+	_reflection_label.text = _format_recent_reflections()
+
+
+func _format_recent_reflections() -> String:
+	if _recent_reflections.is_empty():
+		return Strings.LABELS["REFLECTION_NONE"]
+	var lines: Array[String] = []
+	for entry_value: Variant in _recent_reflections:
+		var entry: Dictionary = entry_value
+		lines.append(
+			Strings.LABELS["REFLECTION_LINE"] % [
+				int(entry.get("tick", 0)),
+				str(entry.get("summary", "")),
+			],
+		)
+	return "\n".join(lines)
 
 
 func _coalesce(value: Variant, fallback: String) -> String:
@@ -238,6 +329,13 @@ func _on_agent_updated(agent_id: String, agent_state: Dictionary) -> void:
 		set_focused_agent(agent_id)
 	if agent_id != _focused_agent:
 		return
+	# M7-ζ-2: agent_update always carries persona_id (it's a required field
+	# on AgentState), so this is the more reliable resolver of the two —
+	# the trace stream's persona_id is optional and only fires on ticks
+	# where the LLM produced narrative fields.
+	var persona_value: Variant = agent_state.get("persona_id")
+	if persona_value != null and str(persona_value) != "":
+		_apply_persona_to_title(agent_id, str(persona_value))
 	var raw: Variant = agent_state.get("relationships", [])
 	if not (raw is Array):
 		return
@@ -317,6 +415,7 @@ func _format_relationships(bonds: Array) -> String:
 		var turns: int = int(bond.get("ichigo_ichie_count", 0))
 		var last_tick_value: Variant = bond.get("last_interaction_tick")
 		var last_zone_value: Variant = bond.get("last_interaction_zone")
+		var belief_kind_value: Variant = bond.get("latest_belief_kind")
 		ranked.append({
 			"other_id": other_id,
 			"persona": _persona_from_agent_id(other_id),
@@ -324,6 +423,7 @@ func _format_relationships(bonds: Array) -> String:
 			"turns": turns,
 			"last_tick": last_tick_value,
 			"last_zone": last_zone_value,
+			"belief_kind": belief_kind_value,
 			"abs_affinity": abs(affinity),
 		})
 	if ranked.is_empty():
@@ -342,15 +442,45 @@ func _format_relationships(bonds: Array) -> String:
 				tail = Strings.LABELS["BOND_LAST_TICK"] % int(last_tick)
 		else:
 			tail = Strings.LABELS["BOND_NO_TICK"]
-		lines.append(
-			Strings.LABELS["BOND_LINE"] % [
-				entry.get("persona", ""),
-				entry.get("affinity", 0.0),
-				entry.get("turns", 0),
-				tail,
-			]
-		)
+		# M7-ζ-2: prefix with the belief icon when the bond has been promoted
+		# (RelationshipBond.latest_belief_kind set by apply_belief_promotion).
+		# Pre-0.9.0-m7z bonds have ``null`` here and fall through to BOND_LINE
+		# so old replay logs / fixtures still render.
+		var belief_icon: String = _belief_icon(entry.get("belief_kind"))
+		if belief_icon != "":
+			lines.append(
+				Strings.LABELS["BOND_LINE_WITH_BELIEF"] % [
+					belief_icon,
+					entry.get("persona", ""),
+					entry.get("affinity", 0.0),
+					entry.get("turns", 0),
+					tail,
+				]
+			)
+		else:
+			lines.append(
+				Strings.LABELS["BOND_LINE"] % [
+					entry.get("persona", ""),
+					entry.get("affinity", 0.0),
+					entry.get("turns", 0),
+					tail,
+				]
+			)
 	return "\n".join(lines)
+
+
+func _belief_icon(belief_kind: Variant) -> String:
+	# Empty string when the bond has no belief promotion yet — the caller
+	# falls back to the icon-less BOND_LINE in that case.
+	if belief_kind == null:
+		return ""
+	var kind := str(belief_kind)
+	if kind == "":
+		return ""
+	var key := "BELIEF_ICON_%s" % kind.to_upper()
+	if Strings.LABELS.has(key):
+		return Strings.LABELS[key]
+	return ""
 
 
 func _compare_relationship_rank(a: Dictionary, b: Dictionary) -> bool:

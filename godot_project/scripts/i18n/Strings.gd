@@ -46,4 +46,31 @@ const LABELS: Dictionary = {
 	"BOND_LAST_IN_ZONE": "前回 %s @ tick %d",
 	"BOND_LAST_TICK": "前回 @ tick %d",
 	"BOND_NO_TICK": "tick 履歴なし",
+	# Persona content (M7-ζ-2). display_name + 1-line personality summary
+	# kept client-side per Plan A judgment: avoids expanding the wire just
+	# to carry static persona text. Lookup key shape: ``PERSONA_NAME_<id>``
+	# (id upper-cased). Fall back to ``*_UNKNOWN`` when the trace arrives
+	# from a persona this client release does not know about.
+	"PERSONA_NAME_KANT": "Immanuel Kant",
+	"PERSONA_SUMMARY_KANT": "勤勉・低神経症 — 規律のリズムが思考を貫く",
+	"PERSONA_NAME_NIETZSCHE": "Friedrich Nietzsche",
+	"PERSONA_SUMMARY_NIETZSCHE": "高エネルギー・突発バースト — 散策で思考が爆発する",
+	"PERSONA_NAME_RIKYU": "千利休",
+	"PERSONA_SUMMARY_RIKYU": "静謐・侘び寂び — 沈黙と所作に意味を宿す",
+	"PERSONA_NAME_UNKNOWN": "(未知のペルソナ)",
+	"PERSONA_SUMMARY_UNKNOWN": "—",
+	# Belief icons (M7-ζ-2). Surfaced as a prefix on the bond row when
+	# RelationshipBond.latest_belief_kind is non-null. Glyphs are universal
+	# but kept here so the JP/EN flip can swap them out later.
+	"BELIEF_ICON_TRUST": "◯",
+	"BELIEF_ICON_CLASH": "✕",
+	"BELIEF_ICON_WARY": "△",
+	"BELIEF_ICON_CURIOUS": "？",
+	"BELIEF_ICON_AMBIVALENT": "◇",
+	# ``BOND_LINE_WITH_BELIEF`` consumes [icon, persona, affinity, turns, tail].
+	"BOND_LINE_WITH_BELIEF": "%s %s  親和度 %+.2f  (%d 回, %s)",
+	# Reflection list (M7-ζ-2). Up to last 3 reflections kept on screen,
+	# newest first, so the researcher can read short reflection cadence
+	# without opening the journal. ``REFLECTION_LINE`` consumes [tick, text].
+	"REFLECTION_LINE": "tick %d: %s",
 }
