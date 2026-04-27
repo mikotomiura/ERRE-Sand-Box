@@ -104,6 +104,17 @@ deliberately larger than a conversational radius so the FSM can react
 reading of "same room but not yet engaged".
 """
 
+_SEP_PUSH_M: Final[float] = 0.4
+"""Per-physics-tick separation nudge in metres (M7ζ-3).
+
+Applied to both agents in opposite XZ directions when their distance
+drops below either persona's ``separation_radius_m`` (default 1.5 m,
+clamped ≤ 5.0 m). Stays well inside :data:`_PROXIMITY_THRESHOLD_M` so
+proximity-event enter/leave crossings keep firing as the pair gradually
+spreads apart — the live "3 体が一箇所に collapse する" failure mode is
+removed without breaking the dialog scheduler's proximity wake-up.
+"""
+
 
 _AFFORDANCE_RADIUS_M: Final[float] = 2.0
 """Distance at which an agent is considered to notice a static world prop (M7 B1).
@@ -814,6 +825,15 @@ class WorldRuntime:
                         to_zone=zone_changed,
                     ),
                 )
+        # M7ζ-3: pair separation nudge — runs after step_kinematics so it
+        # corrects any pair whose Python orchestrator routed them to
+        # near-identical waypoints before the proximity-event detector
+        # samples distances. Order matters: separation must precede
+        # ``_fire_proximity_events`` so the latter sees the post-nudge
+        # geometry and reports stable enter/leave crossings instead of
+        # oscillating around the threshold every tick.
+        if len(self._agents) >= 2:  # noqa: PLR2004 — "pair" is inherently 2
+            self._apply_separation_force()
         # M6-A-2b: time-of-day cascade — emit a TemporalEvent for every
         # registered agent when the simulated clock crosses a period
         # boundary. No-agent ticks are hot-pathed so ``_time_start`` stays
@@ -834,6 +854,49 @@ class WorldRuntime:
         # (two chashitsu tea bowls in the initial scope).
         if self._agents:
             self._fire_affordance_events()
+
+    def _apply_separation_force(self) -> None:
+        """Nudge agent pairs apart on the XZ plane when distance < radius.
+
+        For each unordered pair, the threshold is the *larger* of the two
+        personas' ``separation_radius_m`` so a tight-bubble persona (e.g.
+        Rikyū's 1.2 m) does not block a wider-bubble peer (Kant 1.5 m)
+        from claiming personal space. When inside the radius both agents
+        receive a fixed :data:`_SEP_PUSH_M` push along the unit vector
+        between them; identical positions (``d == 0``) deterministically
+        fall back to ``(1, 0)`` so the test outcome is reproducible.
+
+        :class:`Kinematics` is kept in sync with :class:`Position` so the
+        next physics tick's ``step_kinematics`` integrates from the
+        post-nudge coordinate; the persisted ``AgentState`` carries the
+        same coordinate so the Godot ``agent_update`` envelope reflects
+        it without any wire-side change.
+        """
+        for rt_a, rt_b in combinations(self._agents.values(), 2):
+            radius = max(
+                rt_a.persona.behavior_profile.separation_radius_m,
+                rt_b.persona.behavior_profile.separation_radius_m,
+            )
+            if radius == 0.0:
+                continue
+            dx = rt_a.state.position.x - rt_b.state.position.x
+            dz = rt_a.state.position.z - rt_b.state.position.z
+            d = math.hypot(dx, dz)
+            if d >= radius:
+                continue
+            if d == 0.0:
+                ux, uz = 1.0, 0.0
+            else:
+                ux, uz = dx / d, dz / d
+            for rt, sign in ((rt_a, +1.0), (rt_b, -1.0)):
+                new_pos = rt.state.position.model_copy(
+                    update={
+                        "x": rt.state.position.x + sign * ux * _SEP_PUSH_M,
+                        "z": rt.state.position.z + sign * uz * _SEP_PUSH_M,
+                    },
+                )
+                rt.state = rt.state.model_copy(update={"position": new_pos})
+                rt.kinematics.position = new_pos
 
     def _fire_proximity_events(self) -> None:
         """Detect agent-pair distance crossings of :data:`_PROXIMITY_THRESHOLD_M`.
