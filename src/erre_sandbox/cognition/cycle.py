@@ -459,6 +459,7 @@ class CognitionCycle:
         envelopes = self._build_envelopes(
             new_state,
             plan,
+            persona=persona,
             observations=observations,
             memories=memories,
         )
@@ -665,6 +666,7 @@ class CognitionCycle:
         new_state: AgentState,
         plan: LLMPlan,
         *,
+        persona: PersonaSpec,
         observations: Sequence[Observation] = (),
         memories: Sequence[RankedMemory] = (),
     ) -> list[ControlEnvelope]:
@@ -692,7 +694,10 @@ class CognitionCycle:
                     tick=new_state.tick,
                     agent_id=new_state.agent_id,
                     target=target,
-                    speed=self.DEFAULT_DESTINATION_SPEED,
+                    speed=(
+                        self.DEFAULT_DESTINATION_SPEED
+                        * persona.behavior_profile.movement_speed_factor
+                    ),
                 ),
             )
         if plan.animation:

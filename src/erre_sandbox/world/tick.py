@@ -265,6 +265,17 @@ class AgentRuntime:
     persona: PersonaSpec
     kinematics: Kinematics
     pending: list[Observation] = field(default_factory=list)
+    # M7ζ-3 phase-wheel cognition cadence. The global cognition heap event
+    # still fires every ``_cognition_period`` seconds, but each agent only
+    # actually steps when ``next_cognition_due <= clock.monotonic()`` — so
+    # personas with longer ``cognition_period_s`` skip ticks and personas
+    # with shorter periods step every global tick.
+    next_cognition_due: float = 0.0
+    # M7ζ-3 post-MoveMsg dwell. Set when a MoveMsg fires so the next
+    # ``persona.behavior_profile.dwell_time_s`` seconds suppress cognition
+    # entirely (Rikyū seiza). Phase wheel resumes once the global clock
+    # passes this deadline.
+    dwell_until: float = 0.0
 
 
 @dataclass(slots=True)
@@ -963,16 +974,36 @@ class WorldRuntime:
     async def _on_cognition_tick(self) -> None:
         if not self._agents:
             return
+        # M7ζ-3 phase wheel: the global cognition heap event still fires at
+        # ``_cognition_period`` cadence, but only agents whose
+        # ``next_cognition_due`` has elapsed (and which are not in
+        # post-MoveMsg dwell) actually step this tick. The 1e-6 tolerance
+        # absorbs floating-point drift between the global heap due time and
+        # the per-agent due time computed from ``cognition_period_s``.
+        now = self._clock.monotonic()
         # Evaluate agents list once so that dict mutation during gather
         # (register_agent from inside a handler, if anyone ever does that)
         # cannot desynchronise the result / runtime pairing below.
         runtimes = list(self._agents.values())
-        results = await asyncio.gather(
-            *(self._step_one(rt) for rt in runtimes),
-            return_exceptions=True,
-        )
-        for rt, res in zip(runtimes, results, strict=True):
-            self._consume_result(rt, res)
+        due: list[AgentRuntime] = []
+        for rt in runtimes:
+            if now < rt.dwell_until:
+                continue  # in seiza dwell, skip this cognition tick
+            if rt.next_cognition_due <= now + 1e-6:
+                due.append(rt)
+        if due:
+            results = await asyncio.gather(
+                *(self._step_one(rt) for rt in due),
+                return_exceptions=True,
+            )
+            for rt, res in zip(due, results, strict=True):
+                self._consume_result(rt, res)
+                rt.next_cognition_due = (
+                    now + rt.persona.behavior_profile.cognition_period_s
+                )
+        # Dialog scheduler runs every global tick regardless of which agents
+        # were due, so persona-driven cognition cadence does not starve
+        # proximity-driven dialog initiations.
         self._run_dialog_tick()
         if self._dialog_generator is not None and self._dialog_scheduler is not None:
             await self._drive_dialog_turns(self._current_world_tick())
@@ -1226,6 +1257,13 @@ class WorldRuntime:
                     )
                     env = env.model_copy(update={"target": resolved})  # noqa: PLW2901 — intentional re-bind to propagate the zone-resolved target to both apply_move_command and the downstream queue
                 apply_move_command(rt.kinematics, env)
+                # M7ζ-3: arm seiza-style dwell so the persona's cognition is
+                # suppressed for ``dwell_time_s`` before the phase wheel
+                # resumes. dwell_time_s == 0.0 (the default) makes this a
+                # no-op, so personas without a dwell tuning are unaffected.
+                dwell = rt.persona.behavior_profile.dwell_time_s
+                if dwell > 0.0:
+                    rt.dwell_until = self._clock.monotonic() + dwell
             self._envelopes.put_nowait(env)
 
     # ----- Scheduling helper -----
