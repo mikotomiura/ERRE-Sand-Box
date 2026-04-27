@@ -278,6 +278,11 @@ func _on_reflection_event_received(
 	for entry: Dictionary in _recent_reflections:
 		if int(entry.get("tick", -1)) == tick:
 			return
+	if (
+		_recent_reflections.size() >= _RECENT_REFLECTIONS_CAP
+		and tick < int(_recent_reflections[-1].get("tick", -1))
+	):
+		return
 	var rendered: String = (
 		summary_text if summary_text != ""
 		else Strings.LABELS["REFLECTION_EMPTY_SUMMARY"]
