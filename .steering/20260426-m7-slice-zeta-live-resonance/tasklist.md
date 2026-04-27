@@ -75,12 +75,13 @@
 - [ ] `m9-lora-pre-plan` (D1+D2)
 - [ ] `world-asset-blender-pipeline` (A2+A3)
 - [ ] `event-boundary-observability` (C1+C2)
-- [ ] `dialog-visualization` (F1 — agent 同士の直接会話を吹き出し / 字幕で可視化、2026-04-27 追加)
-- [ ] `agent-locomotion-animation` (F2 — FPS 風 humanoid walk cycle、2026-04-27 追加)
-- [ ] `godot-viewport-layout` (F3 — world viewport を画面いっぱいに拡張、2026-04-27 追加)
+- [ ] `agent-presence-visualization` (F1+F2 統合 — 喋りながら歩く体感単位、
+      Label3D + AnimationTree + placeholder humanoid rig、2026-04-27 D7v2)
+- [ ] `godot-viewport-layout` (F3 — world viewport を画面いっぱいに拡張、
+      2026-04-27 D7v2)
 
 ## /finish-task
 
-- [x] decisions.md (Plan 採用根拠 + /reimagine 比較) — D0-D6 記録済
+- [x] decisions.md (Plan 採用根拠 + /reimagine 比較) — D0-D7 記録済
 - [ ] memory `project_m7_zeta_merged.md` 起こす — ζ-3 merge 後
-- [ ] deferred 新タスク 3 本の steering scaffold — ζ-3 merge 後
+- [ ] deferred 新タスク 5 本の steering scaffold — ζ-3 merge 後 (旧 3 本 + F1+F2 統合 + F3)

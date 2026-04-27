@@ -118,31 +118,56 @@ draw する際の checklist に含めること。
 additive (no bump、SCHEMA_VERSION 据え置き)。直列なら schema 衝突なし。
 並列で進めるとリベース手戻りが発生する。
 
-## D7 — 追加 issue F1〜F3 (2026-04-27) は ζ scope 外、新タスク 3 本に分割
+## D7 — 追加 issue F1〜F3 (2026-04-27) は ζ scope 外、F3 単独 + F1+F2 統合の 2 タスクに分割
+
+> **改訂履歴** (2026-04-27): 初回 v1 案 (3 独立タスク = `dialog-visualization` /
+> `agent-locomotion-animation` / `godot-viewport-layout`) を Plan mode +
+> /reimagine 経ずに直接書いたため、ユーザー指摘 (CLAUDE.md 違反フラグ)
+> を受けた事後 /reimagine validation で v2 案 (F3 単独 + F1+F2 統合) に
+> 訂正。memory:plan_mode_gating の 3 件目 skip 実例として記録。
 
 **判断**: ζ-1 部分マージ後の live 観察で浮上した F1 (agent 同士の直接会話
 可視化) / F2 (FPS-style 歩行) / F3 (world viewport 拡張) は **いずれも ζ
-scope 外** とし、以下 3 本の新タスクに切り出して `/finish-task` 時に
+scope 外** とし、以下 **2 本** の新タスクに切り出して `/finish-task` 時に
 scaffold する:
 
-- `dialog-visualization` (F1) — Label3D 吹き出し + dialog ticker。
-  ζ-2 で wire される persona_id / dialog_turn payload を消費する後続。
-- `agent-locomotion-animation` (F2) — AnimationTree state machine +
-  humanoid rigged mesh。`world-asset-blender-pipeline` と共依存。
+- `agent-presence-visualization` (F1+F2 統合) — Label3D 吹き出し + dialog
+  ticker (F1) と AnimationTree state machine + humanoid placeholder mesh
+  (F2) を 1 タスクで集約。ζ-2 で wire される persona_id / dialog_turn
+  payload を消費する後続。F2 placeholder mesh (CapsuleMesh + 簡易 rig) で
+  Blender 共依存を先行緩和、本格 humanoid rig は
+  `world-asset-blender-pipeline` 着手時に差し替え。
 - `godot-viewport-layout` (F3) — project window size / ReasoningPanel
-  split ratio / MainScene root anchor の見直し。
+  split ratio / MainScene root anchor の見直し。schema/backend 非依存で
+  1 PR 最速 land、M9-LoRA 着手前にユーザー live 体感を最速で底上げ。
 
 **根拠**:
 1. F1〜F3 はいずれも **既存 ζ-1〜3 PR が想定する diff 範囲を逸脱**
    (新規 Label3D シーン / AnimationTree / project.godot window 設定変更)。
    進行中 PR に詰めると review burden 急増 + schema bump 0.9.0-m7z の
    land が遅延する。
-2. F2 は humanoid mesh 制作時間が読めず (B2 と同種の理由)、ζ の
-   live-体感 delivery を阻害する。
+2. **F1+F2 統合の妥当性**: 「agent が喋りながら歩く」体感単位で意味的に
+   同一、両者とも MainScene / AgentController に shared edit が発生する
+   ため別 PR にすると merge conflict 連鎖。Plan agent の v1 不可視再生成案
+   (Option E) と独立に同結論。
 3. F3 は単独で 1 PR の方が anchor 設計の判断 (1280×720 固定 vs
    adaptive 全画面 + ReasoningPanel オーバーレイ) を /reimagine
    対象にしやすい。
 
-**根拠の根拠**: D2 で同じ defer 理由 (PR 肥大 + 時間読めない) で A2/A3
-を `world-asset-blender-pipeline` に切り出した先例と同形。
+**根拠の根拠** (Option A v1 vs Option E v2 の 8 軸比較):
+
+| 軸 | A (3 独立 v1) | E (2 統合 v2) |
+|---|---|---|
+| F2↔Blender 共依存解消 | △ | ○ |
+| F3 delivery 速度 | ◎ | ◎ |
+| /reimagine 粒度 | ◎ | ○ |
+| M9-LoRA 着手阻害 | 小 | 小 |
+| review 負荷 | 中 | 小 |
+| scaffold cost | 3 本 | 2 本 |
+| F1↔F2 衝突回避 | × | ◎ |
+| 体感単位の意味同居 | × | ○ |
+
+5 軸で v2 優越、3 軸で同等。v1 採用は「各 issue が独立体感」と早合点した
+バイアス。/reimagine が実際に結論を覆した (memory:plan_mode_gating の
+v1 バイアス典型形に該当)。
 
