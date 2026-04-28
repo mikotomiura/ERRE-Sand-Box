@@ -321,9 +321,7 @@ async def test_delta_belief_promotion_uses_deterministic_id(
     # promote at most once per dyad due to the deterministic id.
     rows = (
         store._ensure_conn()
-        .execute(
-            "SELECT id FROM semantic_memory WHERE belief_kind IS NOT NULL"
-        )
+        .execute("SELECT id FROM semantic_memory WHERE belief_kind IS NOT NULL")
         .fetchall()
     )
     ids = [r["id"] for r in rows]
@@ -385,9 +383,7 @@ async def test_relational_sink_swallows_integrity_error_on_add_sync(
     # Reaching here means the sink returned cleanly. The call-count
     # assertion (review M1) keeps the test honest if a future formula
     # change reroutes the relational write away from ``_add_sync``.
-    assert call_count >= 1, (
-        "expected the patched _add_sync to be invoked at least once"
-    )
+    assert call_count >= 1, "expected the patched _add_sync to be invoked at least once"
 
 
 async def test_belief_persist_swallows_integrity_error_on_upsert_semantic(

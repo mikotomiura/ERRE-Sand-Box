@@ -8,17 +8,18 @@ reuses the ``world_harness`` fixture so the runtime is in its default post-
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pytest
 
 from erre_sandbox.schemas import EpochPhase, RunLifecycleState
 
-from .conftest import RuntimeHarness
+if TYPE_CHECKING:
+    from .conftest import RuntimeHarness
 
 
 class TestWorldRuntimeLifecycleDefaults:
-    def test_defaults_to_autonomous_phase(
-        self, world_harness: RuntimeHarness
-    ) -> None:
+    def test_defaults_to_autonomous_phase(self, world_harness: RuntimeHarness) -> None:
         state = world_harness.runtime.run_lifecycle
         assert isinstance(state, RunLifecycleState)
         assert state.epoch_phase is EpochPhase.AUTONOMOUS
@@ -33,22 +34,16 @@ class TestWorldRuntimeLifecycleDefaults:
 
 
 class TestWorldRuntimeLifecycleAllowedTransitions:
-    def test_autonomous_to_q_and_a(
-        self, world_harness: RuntimeHarness
-    ) -> None:
+    def test_autonomous_to_q_and_a(self, world_harness: RuntimeHarness) -> None:
         result = world_harness.runtime.transition_to_q_and_a()
         assert result.epoch_phase is EpochPhase.Q_AND_A
         assert world_harness.runtime.run_lifecycle.epoch_phase is EpochPhase.Q_AND_A
 
-    def test_q_and_a_to_evaluation(
-        self, world_harness: RuntimeHarness
-    ) -> None:
+    def test_q_and_a_to_evaluation(self, world_harness: RuntimeHarness) -> None:
         world_harness.runtime.transition_to_q_and_a()
         result = world_harness.runtime.transition_to_evaluation()
         assert result.epoch_phase is EpochPhase.EVALUATION
-        assert (
-            world_harness.runtime.run_lifecycle.epoch_phase is EpochPhase.EVALUATION
-        )
+        assert world_harness.runtime.run_lifecycle.epoch_phase is EpochPhase.EVALUATION
 
     def test_transition_replaces_lifecycle_instance(
         self, world_harness: RuntimeHarness
@@ -70,9 +65,7 @@ class TestWorldRuntimeLifecycleRejectedTransitions:
         with pytest.raises(ValueError, match="q_and_a → evaluation"):
             world_harness.runtime.transition_to_evaluation()
         # Phase unchanged.
-        assert (
-            world_harness.runtime.run_lifecycle.epoch_phase is EpochPhase.AUTONOMOUS
-        )
+        assert world_harness.runtime.run_lifecycle.epoch_phase is EpochPhase.AUTONOMOUS
 
     def test_q_and_a_to_autonomous_is_rejected(
         self, world_harness: RuntimeHarness

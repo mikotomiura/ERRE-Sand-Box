@@ -64,7 +64,7 @@ def _open_dialog(
         tick=5,
     )
     assert initiate is not None
-    return next(iter(scheduler._open))  # noqa: SLF001 — test-only introspection
+    return next(iter(scheduler._open))
 
 
 async def test_record_turn_persists_through_sink(store: MemoryStore) -> None:
@@ -99,11 +99,13 @@ async def test_record_turn_persists_through_sink(store: MemoryStore) -> None:
     assert [r["speaker_persona_id"] for r in rows] == ["kant", "nietzsche", "kant"]
 
 
-async def test_sink_failure_does_not_tear_down_loop(store: MemoryStore) -> None:
+async def test_sink_failure_does_not_tear_down_loop(
+    store: MemoryStore,  # noqa: ARG001  # fixture used for setup side effects only
+) -> None:
     """A raising sink must be swallowed so the live dialog loop survives."""
     captured: list[ControlEnvelope] = []
 
-    def _broken_sink(turn: DialogTurnMsg) -> None:
+    def _broken_sink(turn: DialogTurnMsg) -> None:  # noqa: ARG001  # signature mandated by turn_sink Protocol
         raise RuntimeError("simulated persistence glitch")
 
     scheduler = InMemoryDialogScheduler(

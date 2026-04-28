@@ -200,7 +200,7 @@ class TestEnvelopeTargetAgents:
         test failure. Enumerating the expected routing here forces the
         author of a new variant to update the map intentionally.
         """
-        from erre_sandbox.integration.gateway import (  # noqa: PLC0415
+        from erre_sandbox.integration.gateway import (
             _SERVER_CAPABILITIES,
         )
 

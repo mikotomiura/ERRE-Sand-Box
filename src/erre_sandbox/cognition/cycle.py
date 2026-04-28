@@ -788,14 +788,20 @@ class CognitionCycle:
         out: list[DialogTurnMsg] = []
         for row in reversed(rows):
             try:
+                tick_val = row.get("tick", 0)
+                turn_idx_val = row.get("turn_index", 0)
                 out.append(
                     DialogTurnMsg(
-                        tick=int(row.get("tick", 0)),
+                        tick=int(tick_val)
+                        if isinstance(tick_val, (int, float, str))
+                        else 0,
                         dialog_id=str(row.get("dialog_id", "")),
                         speaker_id=str(row.get("speaker_agent_id", "")),
                         addressee_id=str(row.get("addressee_agent_id", "")),
                         utterance=str(row.get("utterance", "")),
-                        turn_index=int(row.get("turn_index", 0)),
+                        turn_index=int(turn_idx_val)
+                        if isinstance(turn_idx_val, (int, float, str))
+                        else 0,
                     ),
                 )
             except (ValidationError, ValueError, TypeError) as exc:
@@ -875,7 +881,7 @@ def _bias_target_zone(
         )
         try:
             bias_sink(event)
-        except Exception:  # noqa: BLE001 — sink failures must not kill cycle
+        except Exception:
             logger.exception(
                 "bias_sink raised for agent=%s tick=%s; dropping event",
                 agent_id,

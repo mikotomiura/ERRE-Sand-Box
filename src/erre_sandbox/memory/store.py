@@ -970,7 +970,7 @@ class MemoryStore:
             if limit is not None:
                 params.append(int(limit))
             sql = (
-                "SELECT id, dialog_id, tick, turn_index, "
+                "SELECT id, dialog_id, tick, turn_index, "  # noqa: S608  # parameterized: bind vars; `where`/`order_dir`/`limit_sql` are internal-built literals
                 "speaker_agent_id, speaker_persona_id, "
                 "addressee_agent_id, addressee_persona_id, "
                 "utterance, created_at, epoch_phase "
@@ -1081,7 +1081,7 @@ class MemoryStore:
                 params.append(_dt_to_text(since))
             where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
             sql = (
-                "SELECT id, dialog_id, tick, agent_id, persona_id, "
+                "SELECT id, dialog_id, tick, agent_id, persona_id, "  # noqa: S608  # parameterized: bind vars; `where` is internal-built literal
                 "from_zone, to_zone, bias_p, created_at "
                 f"FROM bias_events {where} "
                 "ORDER BY created_at ASC, tick ASC"

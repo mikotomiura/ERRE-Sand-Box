@@ -20,7 +20,6 @@ from erre_sandbox.evidence import (
 )
 from erre_sandbox.memory.store import MemoryStore
 
-
 # ---------------------------------------------------------------------------
 # self_repetition_rate
 # ---------------------------------------------------------------------------
@@ -120,9 +119,7 @@ def test_bias_fired_rate_scales_with_event_count() -> None:
 
 def test_bias_fired_rate_none_for_invalid_denominator() -> None:
     events = [{"bias_p": 0.2}]
-    assert (
-        compute_bias_fired_rate(events, run_duration_s=0.0, num_agents=3) is None
-    )
+    assert compute_bias_fired_rate(events, run_duration_s=0.0, num_agents=3) is None
     assert compute_bias_fired_rate(events, run_duration_s=60.0, num_agents=0) is None
 
 

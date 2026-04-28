@@ -124,7 +124,7 @@ async def test_step_falls_back_on_ollama_error(
     cognition_retriever: Retriever,
     perception_event: PerceptionEvent,
 ) -> None:
-    import httpx  # noqa: PLC0415
+    import httpx
 
     embedding = make_embedding_client()
     llm = make_chat_client(raise_exc=httpx.ConnectError("no route"))
@@ -267,7 +267,7 @@ async def test_step_advances_physical_even_on_fallback(
     cognition_retriever: Retriever,
 ) -> None:
     """Physical decays with time even if the LLM call fails."""
-    import httpx  # noqa: PLC0415
+    import httpx
 
     embedding = make_embedding_client()
     llm = make_chat_client(raise_exc=httpx.ConnectError("fail"))
@@ -377,7 +377,7 @@ async def test_step_continues_on_embedding_unavailable(
     perception_event: PerceptionEvent,
 ) -> None:
     """Embedding outage → memory is stored without a vector, cycle completes."""
-    import httpx  # noqa: PLC0415
+    import httpx
 
     embedding = make_embedding_client(raise_exc=httpx.ConnectError("embed down"))
     llm = make_chat_client()

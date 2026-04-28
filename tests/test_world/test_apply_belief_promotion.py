@@ -106,10 +106,14 @@ def test_apply_belief_promotion_overwrites_prior_kind(
         zone=Zone.CHASHITSU,
     )
     world_harness.runtime.apply_belief_promotion(
-        agent_id=a, other_agent_id="a_other_001", belief_kind="curious",
+        agent_id=a,
+        other_agent_id="a_other_001",
+        belief_kind="curious",
     )
     world_harness.runtime.apply_belief_promotion(
-        agent_id=a, other_agent_id="a_other_001", belief_kind="trust",
+        agent_id=a,
+        other_agent_id="a_other_001",
+        belief_kind="trust",
     )
     bonds = world_harness.runtime._agents[a].state.relationships
     assert bonds[0].latest_belief_kind == "trust"
@@ -121,7 +125,9 @@ def test_apply_belief_promotion_no_op_when_bond_missing(
     """A promotion without a prior bond is silently dropped (sink fail-soft)."""
     a = _register(world_harness, "kant", zone=Zone.STUDY)
     world_harness.runtime.apply_belief_promotion(
-        agent_id=a, other_agent_id="a_unknown_999", belief_kind="trust",
+        agent_id=a,
+        other_agent_id="a_unknown_999",
+        belief_kind="trust",
     )
     bonds = world_harness.runtime._agents[a].state.relationships
     assert bonds == []
@@ -132,7 +138,9 @@ def test_apply_belief_promotion_no_op_when_agent_unregistered(
 ) -> None:
     """A promotion against an unknown agent does not crash."""
     world_harness.runtime.apply_belief_promotion(
-        agent_id="a_unregistered", other_agent_id="a_other_001", belief_kind="clash",
+        agent_id="a_unregistered",
+        other_agent_id="a_other_001",
+        belief_kind="clash",
     )
 
 
@@ -142,13 +150,21 @@ def test_apply_belief_promotion_preserves_other_bonds(
     """Stamping one bond's belief_kind does not touch sibling bonds."""
     a = _register(world_harness, "kant", zone=Zone.AGORA)
     world_harness.runtime.apply_affinity_delta(
-        agent_id=a, other_agent_id="a_friend_001", delta=0.50, tick=1,
+        agent_id=a,
+        other_agent_id="a_friend_001",
+        delta=0.50,
+        tick=1,
     )
     world_harness.runtime.apply_affinity_delta(
-        agent_id=a, other_agent_id="a_rival_001", delta=-0.50, tick=2,
+        agent_id=a,
+        other_agent_id="a_rival_001",
+        delta=-0.50,
+        tick=2,
     )
     world_harness.runtime.apply_belief_promotion(
-        agent_id=a, other_agent_id="a_rival_001", belief_kind="clash",
+        agent_id=a,
+        other_agent_id="a_rival_001",
+        belief_kind="clash",
     )
     bonds_by_other = {
         b.other_agent_id: b
