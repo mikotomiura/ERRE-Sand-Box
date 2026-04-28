@@ -481,8 +481,8 @@ def test_dialog_turn_count_by_persona_query(store: MemoryStore) -> None:
         )
 
     # Execute the shipped SQL against the in-memory DB and assert the shape.
-    conn = store._ensure_conn()  # noqa: SLF001 — test-only access is acceptable
-    with store._conn_lock:  # noqa: SLF001
+    conn = store._ensure_conn()
+    with store._conn_lock:
         rows = conn.execute(
             "SELECT speaker_persona_id, COUNT(*) AS turns "
             "FROM dialog_turns GROUP BY speaker_persona_id ORDER BY turns DESC",
@@ -650,9 +650,7 @@ def test_iter_dialog_turns_filters_by_epoch_phase_autonomous(
         )
         conn.commit()
 
-    autonomous_rows = list(
-        store.iter_dialog_turns(epoch_phase=EpochPhase.AUTONOMOUS)
-    )
+    autonomous_rows = list(store.iter_dialog_turns(epoch_phase=EpochPhase.AUTONOMOUS))
     # AUTONOMOUS includes both explicit AUTONOMOUS and NULL (backward compat).
     assert {r["turn_index"] for r in autonomous_rows} == {0, 99}
 

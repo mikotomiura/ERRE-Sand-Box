@@ -621,9 +621,7 @@ def test_aggregate_pre_migration_null_treated_as_autonomous(tmp_path: Path) -> N
     with store._conn_lock:
         for turn_index in range(6):
             speaker, addressee = (
-                ("kant", "nietzsche")
-                if turn_index % 2 == 0
-                else ("nietzsche", "kant")
+                ("kant", "nietzsche") if turn_index % 2 == 0 else ("nietzsche", "kant")
             )
             conn.execute(
                 "INSERT INTO dialog_turns(id, dialog_id, tick, turn_index, "

@@ -1240,8 +1240,18 @@ class DialogScheduler(Protocol):
         self,
         dialog_id: str,
         reason: Literal["completed", "interrupted", "timeout", "exhausted"],
+        *,
+        tick: int | None = None,
     ) -> DialogCloseMsg:
-        """Close an open dialog and emit the close envelope."""
+        """Close an open dialog and emit the close envelope.
+
+        ``tick`` is a non-breaking optional keyword-only extension added
+        2026-04-28 (codex review F1) so callers that know the current world
+        tick (timeout sweep, exhausted budget) can record the actual close
+        tick instead of falling back to ``last_activity_tick``. Implementations
+        that ignore ``tick`` keep the M4 frozen behaviour, so the wire
+        contract is unchanged.
+        """
         ...
 
     def transcript_of(self, dialog_id: str) -> list[DialogTurnMsg]:

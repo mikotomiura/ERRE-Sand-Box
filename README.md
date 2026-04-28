@@ -55,7 +55,8 @@ and the remaining zone scenes (`agora` / `garden` / `study`).
 
 ```bash
 uv sync
-uv run ruff check
+uv run ruff check src tests
+uv run ruff format --check src tests
 uv run mypy src
 uv run pytest
 ```
@@ -122,7 +123,8 @@ humanoid avatar + ERRE mode tint + 読める dialog bubble + 4 zone シーン
 
 ```bash
 uv sync
-uv run ruff check
+uv run ruff check src tests
+uv run ruff format --check src tests
 uv run mypy src
 uv run pytest
 ```

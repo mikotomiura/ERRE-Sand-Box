@@ -21,13 +21,8 @@ import json
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from erre_sandbox.memory import MemoryStore
-
-if TYPE_CHECKING:
-    from collections.abc import Iterator
-
 
 SUPPORTED_FORMATS: tuple[str, ...] = ("jsonl",)
 """Formats accepted by ``--format``. Parquet joins this set in the M9 LoRA task."""

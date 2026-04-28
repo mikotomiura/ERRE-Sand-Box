@@ -1244,7 +1244,7 @@ class WorldRuntime:
             budget = speaker_rt.state.cognitive.dialog_turn_budget
             if turn_index >= budget:
                 try:
-                    scheduler.close_dialog(did, reason="exhausted")
+                    scheduler.close_dialog(did, reason="exhausted", tick=world_tick)
                 except KeyError:
                     # Racy concurrent close (timeout already ran) — ignore.
                     logger.debug("dialog %s already closed before exhaust", did)

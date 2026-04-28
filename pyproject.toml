@@ -77,7 +77,7 @@ module-root = "src"
 line-length = 88
 target-version = "py311"
 src = ["src", "tests"]
-extend-exclude = [".venv", "docs/_pdf_derived", "godot_project"]
+extend-exclude = [".venv", "docs/_pdf_derived", "godot_project", ".steering", "erre-sandbox-blender"]
 
 [tool.ruff.lint]
 select = ["ALL"]

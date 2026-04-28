@@ -82,7 +82,7 @@ def test_parse_handles_nested_quoted_braces() -> None:
 
 def test_parse_rejects_oversized_input() -> None:
     """Security M1: inputs past MAX_RAW_PLAN_BYTES are refused early."""
-    from erre_sandbox.cognition.parse import MAX_RAW_PLAN_BYTES  # noqa: PLC0415
+    from erre_sandbox.cognition.parse import MAX_RAW_PLAN_BYTES
 
     huge = "a" * (MAX_RAW_PLAN_BYTES + 1) + _plan_json()
     assert parse_llm_plan(huge) is None

@@ -194,7 +194,7 @@ class InMemoryDialogScheduler:
         if self._turn_sink is not None:
             try:
                 self._turn_sink(turn)
-            except Exception:  # noqa: BLE001 — sink failures must not kill run
+            except Exception:
                 logger.exception(
                     "turn_sink raised for dialog_id=%s turn_index=%d; "
                     "dropping row but keeping dialog alive",
@@ -206,19 +206,40 @@ class InMemoryDialogScheduler:
         self,
         dialog_id: str,
         reason: Literal["completed", "interrupted", "timeout", "exhausted"],
+        *,
+        tick: int | None = None,
     ) -> DialogCloseMsg:
         """Close ``dialog_id`` and emit the envelope via the sink.
 
+        When ``tick`` is provided the close is recorded at that world tick
+        (``DialogCloseMsg.tick`` and the cooldown anchor both honour it).
+        When omitted, falls back to ``dialog.last_activity_tick`` so callers
+        that only see the M4-frozen Protocol surface continue to behave as
+        before. The keyword-only ``tick`` is the supported path for any
+        caller that knows the current world tick (timeout sweep, exhausted
+        budget, manual interrupt) — see codex review F1 (2026-04-28) for
+        the stale-tick regression that motivated the parameter.
+
         Raises ``KeyError`` when the id is not currently open.
         """
+        return self._close_dialog_at(dialog_id, reason, tick)
+
+    def _close_dialog_at(
+        self,
+        dialog_id: str,
+        reason: Literal["completed", "interrupted", "timeout", "exhausted"],
+        tick: int | None,
+    ) -> DialogCloseMsg:
+        """Apply the close operation, honouring an optional override tick."""
         dialog = self._open.pop(dialog_id, None)
         if dialog is None:
             raise KeyError(f"close_dialog called for unknown dialog_id={dialog_id!r}")
+        close_tick = tick if tick is not None else dialog.last_activity_tick
         key = _pair_key(dialog.initiator, dialog.target)
         self._pair_to_id.pop(key, None)
-        self._last_close_tick[key] = dialog.last_activity_tick
+        self._last_close_tick[key] = close_tick
         envelope = DialogCloseMsg(
-            tick=dialog.last_activity_tick,
+            tick=close_tick,
             dialog_id=dialog_id,
             reason=reason,
         )
@@ -288,7 +309,7 @@ class InMemoryDialogScheduler:
             if world_tick - d.last_activity_tick >= self.TIMEOUT_TICKS
         ]
         for did in expired:
-            self.close_dialog(did, reason="timeout")
+            self.close_dialog(did, reason="timeout", tick=world_tick)
 
     def _emit(self, envelope: ControlEnvelope) -> None:
         try:

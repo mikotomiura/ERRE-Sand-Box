@@ -79,7 +79,7 @@ def _jaccard(a: set[tuple[str, str, str]], b: set[tuple[str, str, str]]) -> floa
     return len(a & b) / len(union)
 
 
-def compute_self_repetition_rate(turns: list[dict]) -> float | None:
+def compute_self_repetition_rate(turns: list[dict[str, object]]) -> float | None:
     """Mean trigram Jaccard between consecutive turns of the *same* persona.
 
     For each ``speaker_persona_id``, examine the trailing
@@ -116,7 +116,7 @@ def compute_self_repetition_rate(turns: list[dict]) -> float | None:
     return sum(per_persona_means) / len(per_persona_means)
 
 
-def compute_cross_persona_echo_rate(turns: list[dict]) -> float | None:
+def compute_cross_persona_echo_rate(turns: list[dict[str, object]]) -> float | None:
     """Mean trigram Jaccard between *different* personas' utterances.
 
     Within each ``dialog_id`` (so cross-dialog drift does not contaminate
@@ -125,7 +125,7 @@ def compute_cross_persona_echo_rate(turns: list[dict]) -> float | None:
     different personas. Returns the dialog-wise mean, or ``None`` when no
     dialog contained turns from at least two distinct personas.
     """
-    by_dialog: dict[str, list[dict]] = defaultdict(list)
+    by_dialog: dict[str, list[dict[str, object]]] = defaultdict(list)
     for turn in turns:
         dialog_id = turn.get("dialog_id")
         persona = turn.get("speaker_persona_id")
@@ -148,12 +148,11 @@ def compute_cross_persona_echo_rate(turns: list[dict]) -> float | None:
             for j in range(i + 1, len(window)):
                 if window[i]["persona"] == window[j]["persona"]:
                     continue
-                scores.append(
-                    _jaccard(
-                        _trigrams(window[i]["utterance"]),
-                        _trigrams(window[j]["utterance"]),
-                    ),
-                )
+                u_i = window[i]["utterance"]
+                u_j = window[j]["utterance"]
+                if not isinstance(u_i, str) or not isinstance(u_j, str):
+                    continue
+                scores.append(_jaccard(_trigrams(u_i), _trigrams(u_j)))
         if scores:
             per_dialog_means.append(sum(scores) / len(scores))
 
@@ -163,7 +162,7 @@ def compute_cross_persona_echo_rate(turns: list[dict]) -> float | None:
 
 
 def compute_bias_fired_rate(
-    events: list[dict],
+    events: list[dict[str, object]],
     *,
     run_duration_s: float,
     num_agents: int,
@@ -200,11 +199,11 @@ def compute_bias_fired_rate(
     if expected_ticks <= 0:
         return None
 
-    bias_p_values = [
-        float(e.get("bias_p", 0.0))
-        for e in events
-        if isinstance(e.get("bias_p"), (int, float))
-    ]
+    bias_p_values: list[float] = []
+    for e in events:
+        bias_p = e.get("bias_p")
+        if isinstance(bias_p, (int, float)):
+            bias_p_values.append(float(bias_p))
     if not bias_p_values or any(p <= 0 for p in bias_p_values):
         return None
 
@@ -232,7 +231,8 @@ def aggregate(run_db_path: Path) -> dict[str, object]:
     and is the exact shape M9 comparison runs must also produce. Keys use
     ``snake_case`` to stay legible in diff tools.
     """
-    from erre_sandbox.memory.store import MemoryStore
+    # Lazy import — keep memory/ off the cognition graph at module load.
+    from erre_sandbox.memory.store import MemoryStore  # noqa: PLC0415
 
     store = MemoryStore(db_path=run_db_path)
     store.create_schema()
@@ -257,7 +257,11 @@ def aggregate(run_db_path: Path) -> dict[str, object]:
         if isinstance(addressee, str):
             agent_ids.add(addressee)
     num_agents = len(agent_ids)
-    ticks = [int(t["tick"]) for t in turns if "tick" in t]
+    ticks: list[int] = []
+    for t in turns:
+        tick_val = t.get("tick")
+        if isinstance(tick_val, (int, float)):
+            ticks.append(int(tick_val))
     run_duration_s = 0.0
     if ticks:
         run_duration_s = (max(ticks) - min(ticks)) * CognitionCycle.DEFAULT_TICK_SECONDS

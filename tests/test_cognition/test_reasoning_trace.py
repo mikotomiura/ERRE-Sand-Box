@@ -161,7 +161,8 @@ async def test_cycle_stamps_persona_id_for_non_default_persona(
     """
     llm_content = _plan_json(decision="silence is the answer")
     persona: PersonaSpec = make_persona_spec(
-        persona_id="rikyu", display_name="Sen no Rikyū",
+        persona_id="rikyu",
+        display_name="Sen no Rikyū",
     )
     agent = make_agent_state(agent_id="a_rikyu_002", persona_id="rikyu")
     embedding = make_embedding_client()
