@@ -3,6 +3,12 @@
 ## 1. ディレクトリ構成
 
 ```
+> **現状実装スナップショット (last verified 2026-04-28)**: 本ツリーは
+> `find src tests godot_project personas fixtures docs .claude .agents` 実態を反映する。
+> `[planned]` ラベルは将来追加予定で現存しないファイル/ディレクトリを示す
+> (codex addendum D6 + 「現状 snapshot」運用)。
+
+```
 erre-sandbox/
 ├── src/erre_sandbox/           # Python ソースコード
 │   ├── __init__.py
@@ -10,16 +16,19 @@ erre-sandbox/
 │   ├── bootstrap.py            # Composition Root: MemoryStore / CognitionCycle /
 │   │                           # WorldRuntime / DialogScheduler の配線
 │   ├── schemas.py              # AgentState, Memory, ControlEnvelope (Pydantic v2)
+│   ├── contracts/              # 軽量 Pydantic 契約 (PR #111 / codex F5 で導入)
+│   │   ├── __init__.py         # M2_THRESHOLDS / Thresholds 再エクスポート
+│   │   └── thresholds.py       # M2 受け入れ閾値 (pydantic + stdlib のみ依存)
 │   ├── erre/                   # ERRE パイプライン DSL (M5 で完成)
-│   │   ├── fsm.py              # ERREModeTransitionPolicy / DefaultERREModePolicy (zone/fatigue/shuhari hook)
-│   │   └── sampling_table.py   # 8 モード x 3 パラメータの SAMPLING_DELTA_BY_MODE 単一起源
+│   │   ├── fsm.py              # ERREModeTransitionPolicy / DefaultERREModePolicy
+│   │   └── sampling_table.py   # 8 モード x 3 パラメータの SAMPLING_DELTA_BY_MODE
 │   ├── inference/              # G-GEAR 側 — LLM 推論
-│   │   ├── sglang_adapter.py   # SGLang バックエンド
-│   │   ├── ollama_adapter.py   # Ollama バックエンド (開発用)
+│   │   ├── sglang_adapter.py   # SGLang バックエンド [planned: M7+ 移行]
+│   │   ├── ollama_adapter.py   # Ollama バックエンド (現状 default)
 │   │   └── sampling.py         # ERRE mode 別 sampling compose
 │   ├── memory/                 # 記憶システム (sqlite-vec + semantic layer)
 │   │   ├── store.py            # sqlite-vec ラッパー (upsert/recall_semantic 含む)
-│   │   └── embedding.py        # 埋め込みモデル管理
+│   │   └── embedding.py        # 埋め込みモデル管理 (現状: nomic-embed-text 768d)
 │   ├── cognition/              # CoALA 認知サイクル
 │   │   ├── cycle.py            # Observe → Act ループ
 │   │   ├── reflection.py       # Reflector collaborator (M4)
@@ -27,12 +36,12 @@ erre-sandbox/
 │   │   ├── importance.py       # importance scoring
 │   │   ├── parse.py            # LLM 出力パース
 │   │   └── state.py            # state 更新ヘルパ
-│   ├── integration/            # プロセス境界の配線 (M4 で追加、M5 で dialog_turn 追加)
-│   │   ├── gateway.py          # FastAPI + WebSocket (`/stream`, `/ws/observe`, `/health`)
+│   ├── integration/            # プロセス境界の配線 (M4 で追加)
+│   │   ├── gateway.py          # FastAPI + WebSocket (`/ws/observe`, `/health`)
 │   │   ├── dialog.py           # InMemoryDialogScheduler + proximity auto-fire
 │   │   ├── dialog_turn.py      # OllamaDialogTurnGenerator (M5、inference 層を例外的に import)
 │   │   ├── protocol.py         # envelope routing 判定
-│   │   ├── metrics.py          # 統合層の観測メトリクス
+│   │   ├── metrics.py          # 現在は contracts/thresholds.py への shim (PR #111 で再構成)
 │   │   ├── scenarios.py        # 統合テスト用シナリオ
 │   │   └── acceptance.py       # acceptance probe ヘルパ
 │   ├── evidence/               # post-hoc metric 集計 (M8 で追加)
@@ -45,11 +54,13 @@ erre-sandbox/
 │   ├── world/                  # ワールドシミュレーション
 │   │   ├── tick.py             # asyncio tick loop (WorldRuntime)
 │   │   └── zones.py            # peripatos/chashitsu/agora/garden/study
-│   └── ui/                     # MacBook 側 — 可視化
-│       ├── ws_client.py        # WebSocket クライアント
-│       ├── dashboard.py        # Streamlit / HTMX ダッシュボード
-│       └── godot_bridge.py     # Godot 連携
-├── godot_project/              # MIT ライセンスの Godot 4.4 シーン
+│   └── ui/                     # MacBook 側 — 可視化 (依存先: schemas.py + contracts/ のみ)
+│       ├── __init__.py
+│       └── dashboard/          # サーバサイド集計 + Streamlit/HTMX [planned] フロント
+│           ├── __init__.py
+│           ├── messages.py     # AlertRecord / MetricsView などの Pydantic
+│           └── state.py        # MetricsAggregator / ThresholdEvaluator / DashboardState
+├── godot_project/              # MIT ライセンスの Godot 4.6 シーン
 │   ├── project.godot
 │   ├── scenes/                 # 3D シーン (.tscn)
 │   ├── scripts/                # GDScript (.gd)
@@ -58,19 +69,24 @@ erre-sandbox/
 │   ├── kant.yaml               # カント
 │   ├── nietzsche.yaml          # ニーチェ
 │   └── rikyu.yaml              # 利休
-│                               # 将来追加予定 (M6 以降):
-│                               # dogen / aristotle / thoreau /
-│                               # kierkegaard / rousseau 等
+│                               # 将来追加予定 (M9+ scaling trigger 確定後):
+│                               # 4th persona (agora 主体仮説) / dogen / aristotle / thoreau 等
 ├── fixtures/                   # Wire contract specimens (言語中立)
 │   └── control_envelope/       # ControlEnvelope 各 kind の JSON + README
 ├── corpora/                    # PD ソース (青空文庫/Gutenberg/archive.org)
 ├── tests/                      # pytest-asyncio テスト
 │   ├── conftest.py
 │   ├── test_schemas.py
+│   ├── test_architecture/      # 層依存 invariant (PR #111 で導入)
 │   ├── test_memory/
 │   ├── test_cognition/
 │   ├── test_inference/
-│   └── test_world/
+│   ├── test_integration/
+│   ├── test_evidence/
+│   ├── test_erre/
+│   ├── test_ui/
+│   ├── test_world/
+│   └── test_godot_project.py
 ├── examples/
 │   └── walking_thinkers_12h/   # 12時間シミュレーション設定
 ├── docs/                       # 永続ドキュメント (本ファイル群)
@@ -79,25 +95,28 @@ erre-sandbox/
 │   ├── repository-structure.md
 │   ├── development-guidelines.md
 │   └── glossary.md
-├── .claude/                    # Claude Code 設定
+├── .claude/                    # Claude Code 設定 (canonical)
 │   ├── agents/                 # サブエージェント定義
 │   ├── commands/               # スラッシュコマンド
 │   ├── skills/                 # スキル定義
 │   └── hooks/                  # フック
+├── .agents/                    # Codex 向け SKILL mirror (PR で commit)
+│   └── skills/                 # `.claude/skills` のサブセット
 ├── .steering/                  # タスク単位の作業記録
 │   ├── _setup-progress.md      # 構築進捗
 │   └── _template/              # タスク用テンプレート
-├── .github/
-│   └── workflows/ci.yml        # uv sync --frozen → ruff → pytest
+├── .github/                    # [planned] CI/governance、現存しない
+│   └── workflows/ci.yml        # [planned] uv sync --frozen → ruff → pytest (`.steering/20260428-ci-pipeline-setup/` で起票予定)
 ├── pyproject.toml              # uv + ruff + pytest + mypy 設定
 ├── uv.lock                     # 依存ロックファイル
 ├── .python-version             # 3.11 pin
 ├── LICENSE                     # Apache-2.0
 ├── LICENSE-MIT                 # MIT
 ├── NOTICE                      # 帰属表示
-├── CITATION.cff                # Zenodo DOI 連携
-├── CODE_OF_CONDUCT.md          # Contributor Covenant 2.1
+├── CITATION.cff                # [planned] Zenodo DOI 連携 (現存しない)
+├── CODE_OF_CONDUCT.md          # [planned] Contributor Covenant 2.1 (現存しない)
 ├── CLAUDE.md                   # Claude Code への指示
+├── AGENTS.md                   # Codex への指示 (CLAUDE.md と並列、PR で commit)
 ├── ERRE-Sandbox_v0.2.pdf       # 研究企画書兼技術設計書
 └── README.md                   # 英語主体、日本語ジャンプリンク付き
 ```
@@ -117,7 +136,7 @@ erre-sandbox/
 ### `godot_project/`
 - **目的**: Godot 4.4 の 3D シーン・スクリプト・アセット
 - **置くべきもの**: `.tscn` シーン、`.gd` スクリプト、3D モデル、テクスチャ
-- **置くべきでないもの**: Python コード (Python 側は `src/erre_sandbox/ui/godot_bridge.py` で WebSocket 接続)
+- **置くべきでないもの**: Python コード (Python 側は `src/erre_sandbox/ui/dashboard/` 配下で WebSocket 接続を扱う)
 
 ### `personas/`
 - **目的**: 偉人ペルソナの YAML 定義と LoRA 設定
@@ -152,7 +171,7 @@ erre-sandbox/
 
 | 種類 | 規則 | 例 |
 |---|---|---|
-| Python モジュール | snake_case | `ollama_adapter.py`, `ws_client.py` |
+| Python モジュール | snake_case | `ollama_adapter.py`, `dashboard/state.py` |
 | Python クラス | PascalCase | `AgentState`, `MemoryStream` |
 | Python 関数・変数 | snake_case | `dump_for_prompt()`, `tick_count` |
 | Python 定数 | UPPER_SNAKE_CASE | `DEFAULT_TEMPERATURE`, `MAX_AGENTS` |
