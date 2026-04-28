@@ -1,5 +1,9 @@
 # 設計
 
+> **DRAFT REQUIREMENT ONLY — DO NOT EXECUTE.**
+> requirement.md は確定済だが design / tasklist は template のまま。
+> 実装着手前に本 design を埋める必要がある (codex addendum D8, 2026-04-28)。
+
 ## 実装アプローチ
 
 採用する方針と、その理由。
