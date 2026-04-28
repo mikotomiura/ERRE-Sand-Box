@@ -9,7 +9,6 @@ description: >
   import 文が依存方向に違反していないか確認する時、
   pip install / uv add でライブラリを追加する時に自動召喚される。
   GPL ライブラリ (bpy 等) を src/erre_sandbox/ に import する禁止も含む。
-allowed-tools: Read, Grep, Glob
 ---
 
 # Architecture Rules

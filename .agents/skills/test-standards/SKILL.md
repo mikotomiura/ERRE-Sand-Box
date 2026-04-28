@@ -10,7 +10,6 @@ description: >
   sqlite-vec 一時 DB、LLM モック戦略、埋め込みプレフィックス検証テスト、
   TDD 適用範囲 (スキーマ検証・記憶検索・ERRE 状態遷移が対象) を定義する。
   ファイル命名: test_schemas.py, test_reflection.py など test_ prefix の .py ファイル全般。
-allowed-tools: Read, Edit, Glob, Grep, Bash(pytest *), Bash(uv run pytest *)
 ---
 
 # Test Standards

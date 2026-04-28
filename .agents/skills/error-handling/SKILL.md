@@ -8,7 +8,6 @@ description: >
   asyncio.gather() で並列タスクの一部が失敗した場合の処理を書く時に自動召喚される。
   ollama_adapter.py / sglang_adapter.py / ws_client.py / store.py を変更する時は
   必ずこの Skill を参照すること。
-allowed-tools: Read, Edit, Glob, Grep
 ---
 
 # Error Handling

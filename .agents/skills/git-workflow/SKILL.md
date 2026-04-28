@@ -8,7 +8,6 @@ description: >
   .steering/ を Refs: で参照する時に自動召喚される。
   main ブランチへの直接 push 禁止・作業ブランチ経由のみという制約を強制する。
   ファイル: .github/workflows/ci.yml, CITATION.cff, pyproject.toml (バージョン管理)。
-allowed-tools: Bash(git *), Read
 ---
 
 # Git Workflow

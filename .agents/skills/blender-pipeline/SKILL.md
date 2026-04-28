@@ -10,7 +10,6 @@ description: >
   import bpy を src/erre_sandbox/ に書くことは絶対禁止
   (architecture-rules Skill 参照)。
   GPL-3.0 ライセンスのコードは erre-sandbox-blender/ に完全分離すること。
-allowed-tools: Read, Grep, Glob
 ---
 
 # Blender Pipeline
