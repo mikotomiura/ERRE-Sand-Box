@@ -1,12 +1,7 @@
 # ブロッカー記録
 
-## ブロッカー 1: [タイトル]
+No blockers recorded for this task.
 
-- **発生日時**:
-- **症状**:
-- **試したこと**:
-  1. ...
-  2. ...
-- **原因**:
-- **解決方法**:
-- **教訓**: 次回同じ状況に遭遇したらどうすべきか
+(ファイルは `.steering/_template/blockers.md` から scaffold 時にコピーされたが、
+本 pre-plan task で blocker は発生せず、PR #110 を 2026-04-28 に merge 完了。
+codex addendum D9 で template 残置を指摘されたため整理。)

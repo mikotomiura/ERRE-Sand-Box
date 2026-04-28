@@ -12,7 +12,7 @@
 - [x] decisions.md 起草 (D1-D5, 各 v1/v2/hybrid + cite + ζ 数値照合)
 - [x] tasklist.md (本ファイル) 起草
 - [x] 受け入れ条件 4 項目を grep 検証 (AC1=5 ADR / AC2=8 ζ literals: 126・18・201・0.112・36/74/16・36:74:16・43%・34% / AC3=v1+v2+hybrid 43 行 / AC4=25 checkbox + 6 section / AC5=src diff zero)
-- [ ] git commit (Conventional Commits, scope=m9-lora-pre-plan, refs L6 ADR)
+- [x] git commit (commit 9989bf8, branch docs/m9-lora-pre-plan, merged via PR #110 → main 100e019, 2026-04-28)
 
 ---
 
@@ -75,5 +75,5 @@
   (decisions=9 paths / design=8 paths すべて exist 確認済)
 - [x] documentation only 保証
   (`.steering/20260428-m9-lora-pre-plan/` 配下 3 ファイルのみ変更、src/tests/godot/personas 差分ゼロ)
-- [ ] git commit (例: `docs(m9-pre-plan): 5 ADR with /reimagine v1+v2 hybrid for LoRA trigger / model / scaling / M11 / rollback`)
-- [ ] PR 作成 (refs L6 ADR PR、本 task は docs-only として merge)
+- [x] git commit (`docs(m9-pre-plan): 5 ADR with /reimagine v1+v2 hybrid for LoRA trigger / model / scaling / M11 / rollback`, commit 9989bf8)
+- [x] PR 作成 → merged (PR #110, squash → main 100e019, 2026-04-28)
