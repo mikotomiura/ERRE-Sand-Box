@@ -1,8 +1,13 @@
 model = "gpt-5.5"
 model_reasoning_effort = "xhigh"
 
+web_search = "live"
+
 [features]
 codex_hooks = true
+
+[sandbox_workspace_write]
+network_access = true
 
 [agents]
 max_threads = 6
