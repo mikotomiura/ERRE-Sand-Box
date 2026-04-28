@@ -341,3 +341,79 @@ def test_iter_open_dialogs_drops_closed_dialogs() -> None:
     assert did is not None
     scheduler.close_dialog(did, reason="completed")
     assert list(scheduler.iter_open_dialogs()) == []
+
+
+# ---------------------------------------------------------------------------
+# F1 regression — close_dialog tick parameter (codex review 2026-04-28)
+# ---------------------------------------------------------------------------
+
+
+def test_close_dialog_uses_explicit_tick_when_provided() -> None:
+    captured, sink = _collector()
+    scheduler = InMemoryDialogScheduler(envelope_sink=sink, rng=_fire(0.0))
+    scheduler.schedule_initiate("a", "b", Zone.PERIPATOS, tick=0)
+    did = scheduler.get_dialog_id("a", "b")
+    assert did is not None
+    explicit_tick = 42
+    close = scheduler.close_dialog(did, reason="completed", tick=explicit_tick)
+    assert close.tick == explicit_tick
+    closes = [c for c in captured if isinstance(c, DialogCloseMsg)]
+    assert closes[-1].tick == explicit_tick
+    cooldown = InMemoryDialogScheduler.COOLDOWN_TICKS
+    assert (
+        scheduler.schedule_initiate(
+            "a",
+            "b",
+            Zone.PERIPATOS,
+            tick=explicit_tick + cooldown - 1,
+        )
+        is None
+    )
+    assert (
+        scheduler.schedule_initiate(
+            "a",
+            "b",
+            Zone.PERIPATOS,
+            tick=explicit_tick + cooldown + 1,
+        )
+        is not None
+    )
+
+
+def test_tick_timeout_close_emits_current_tick_not_last_activity() -> None:
+    captured, sink = _collector()
+    scheduler = InMemoryDialogScheduler(envelope_sink=sink, rng=_fire(0.99))
+    scheduler.schedule_initiate("a", "b", Zone.PERIPATOS, tick=0)
+    timeout_world_tick = InMemoryDialogScheduler.TIMEOUT_TICKS + 1
+    scheduler.tick(
+        timeout_world_tick,
+        [
+            AgentView(agent_id="a", zone=Zone.PERIPATOS, tick=timeout_world_tick),
+            AgentView(agent_id="b", zone=Zone.PERIPATOS, tick=timeout_world_tick),
+        ],
+    )
+    closes = [c for c in captured if isinstance(c, DialogCloseMsg)]
+    assert len(closes) == 1
+    assert closes[0].reason == "timeout"
+    assert closes[0].tick == timeout_world_tick
+
+
+def test_close_dialog_falls_back_to_last_activity_when_tick_omitted() -> None:
+    captured, sink = _collector()
+    scheduler = InMemoryDialogScheduler(envelope_sink=sink)
+    scheduler.schedule_initiate("a", "b", Zone.PERIPATOS, tick=0)
+    did = scheduler.get_dialog_id("a", "b")
+    assert did is not None
+    turn = DialogTurnMsg(
+        tick=5,
+        dialog_id=did,
+        speaker_id="a",
+        addressee_id="b",
+        utterance="hello",
+        turn_index=0,
+    )
+    scheduler.record_turn(turn)
+    close = scheduler.close_dialog(did, reason="completed")
+    assert close.tick == 5
+    closes = [c for c in captured if isinstance(c, DialogCloseMsg)]
+    assert closes[-1].tick == 5
