@@ -186,15 +186,16 @@ erre-sandbox/
 
 - **相対パス vs 絶対パス**: `src/erre_sandbox/` 内では絶対パス (`from erre_sandbox.schemas import AgentState`) を使用
 - **循環参照**: 禁止。型ヒントのみの参照は `from __future__ import annotations` + `TYPE_CHECKING` で解決
-- **レイヤー間の依存方向**:
-  - `cognition/` → `memory/`, `inference/` (認知が記憶と推論を呼ぶ)
-  - `world/` → `cognition/` (ワールドが認知サイクルを駆動)
-  - `integration/` → `world/`, `schemas.py` (プロセス境界: gateway, dialog scheduler)
-  - `bootstrap.py` → 全サブパッケージ (Composition Root のみ横断可)
-  - `ui/` → `schemas.py` のみ (UI はスキーマだけに依存、WebSocket 経由で疎結合)
+- **レイヤー間の依存方向** (詳細は `.claude/skills/architecture-rules/SKILL.md` のテーブル):
   - `schemas.py` → 他モジュールへの依存なし (最下層)
-  - `inference/` → `schemas.py` のみ
-  - `memory/` → `schemas.py` のみ
+  - `contracts/` → `schemas.py`, pydantic, stdlib のみ (PR #111 / codex F5 で導入。複数層から参照される軽量 Pydantic 契約。`integration/` の重い `__init__.py` を経由せず `ui/` から直接 import 可)
+  - `inference/` → `schemas.py`, `contracts/`
+  - `memory/` → `schemas.py`, `contracts/`
+  - `cognition/` → `inference/`, `memory/`, `schemas.py`, `contracts/`, `erre/`
+  - `world/` → `cognition/`, `schemas.py`, `contracts/`
+  - `integration/` → `world/`, `cognition/`, `memory/`, `inference/`, `schemas.py`, `contracts/` (プロセス境界: gateway, dialog scheduler)
+  - `ui/` → `schemas.py`, `contracts/` のみ (UI は WebSocket 経由で疎結合、`integration/` には触らない)
+  - `bootstrap.py` → 全サブパッケージ (Composition Root のみ横断可)
 
 ```
 bootstrap.py ──┐  (Composition Root)
@@ -202,7 +203,7 @@ bootstrap.py ──┐  (Composition Root)
    integration/ → world/ → cognition/ → inference/
                                       → memory/
                                            ↓
-ui/ ─────────────────────→ schemas.py ← (全モジュールが参照)
+ui/ ────→ schemas.py + contracts/ ← (全モジュールが参照)
 ```
 
 ## 5. 新規ファイル追加時のルール
@@ -218,6 +219,7 @@ ui/ ─────────────────────→ schemas.p
    - 可視化・UI 関連 → `ui/`
    - ERRE パイプライン関連 → `erre/`
    - データスキーマ → `schemas.py` に追記
+   - 複数レイヤーから参照される軽量 Pydantic 契約 (閾値定数・config モデル等) → `contracts/`
    - 複数サブパッケージを束ねる起動・配線のみ → `bootstrap.py`
 2. **既存のディレクトリに置くべきか、新しいディレクトリを作るべきか?**
    - 既存ディレクトリの責務に含まれるなら既存に追加
