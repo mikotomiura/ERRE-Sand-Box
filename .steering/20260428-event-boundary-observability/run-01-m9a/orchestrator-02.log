@@ -1,0 +1,68 @@
+2026-04-29 00:17:31,007 [erre_sandbox.bootstrap] INFO: [bootstrap] health_check http://127.0.0.1:11434 (model=qwen3:8b)
+2026-04-29 00:17:31,013 [httpx] INFO: HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+2026-04-29 00:17:31,020 [erre_sandbox.bootstrap] INFO: [bootstrap] dialog_turn wired (3 personas in registry)
+2026-04-29 00:17:31,024 [erre_sandbox.bootstrap] INFO: [bootstrap] registered agent a_kant_001 (persona=kant zone=study)
+2026-04-29 00:17:31,026 [erre_sandbox.bootstrap] INFO: [bootstrap] registered agent a_nietzsche_001 (persona=nietzsche zone=peripatos)
+2026-04-29 00:17:31,028 [erre_sandbox.bootstrap] INFO: [bootstrap] registered agent a_rikyu_001 (persona=rikyu zone=chashitsu)
+2026-04-29 00:17:31,042 [erre_sandbox.bootstrap] INFO: [bootstrap] starting (host=0.0.0.0 port=8000 db=var/run-m9a-02.db)
+INFO:     Started server process [25676]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     192.168.3.118:58068 - "WebSocket /ws/observe" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     192.168.3.118:58069 - "WebSocket /ws/observe" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     192.168.3.118:58152 - "WebSocket /ws/observe" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     192.168.3.118:58154 - "WebSocket /ws/observe" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     192.168.3.118:58178 - "WebSocket /ws/observe" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     192.168.3.118:58180 - "WebSocket /ws/observe" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     192.168.3.118:58204 - "WebSocket /ws/observe" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     192.168.3.118:58206 - "WebSocket /ws/observe" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     192.168.3.118:58231 - "WebSocket /ws/observe" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     192.168.3.118:58233 - "WebSocket /ws/observe" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     192.168.3.118:58257 - "WebSocket /ws/observe" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     192.168.3.118:58258 - "WebSocket /ws/observe" [accepted]
+INFO:     connection open
+INFO:     connection closed
+2026-04-29 00:17:41,914 [httpx] INFO: HTTP Request: POST http://127.0.0.1:11434/api/embed "HTTP/1.1 200 OK"
+2026-04-29 00:17:41,929 [httpx] INFO: HTTP Request: POST http://127.0.0.1:11434/api/embed "HTTP/1.1 200 OK"
+2026-04-29 00:17:41,943 [httpx] INFO: HTTP Request: POST http://127.0.0.1:11434/api/embed "HTTP/1.1 200 OK"
+INFO:     192.168.3.118:58284 - "WebSocket /ws/observe" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     192.168.3.118:58285 - "WebSocket /ws/observe" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     192.168.3.118:58311 - "WebSocket /ws/observe" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     192.168.3.118:58312 - "WebSocket /ws/observe" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     192.168.3.118:58336 - "WebSocket /ws/observe" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     192.168.3.118:58338 - "WebSocket /ws/observe" [accepted]
+INFO:     connection open
+INFO:     connection closed

@@ -1,0 +1,21 @@
+{
+  "url": "ws://localhost:8000/ws/observe",
+  "out": ".steering\\20260428-event-boundary-observability\\run-01-m9a\\run-03.jsonl",
+  "duration_s": 360.0,
+  "elapsed_s": 362.08,
+  "envelope_total": 489,
+  "envelope_per_kind": {
+    "world_layout": 1,
+    "agent_update": 22,
+    "speech": 22,
+    "move": 22,
+    "animation": 22,
+    "reasoning_trace": 22,
+    "dialog_initiate": 2,
+    "dialog_turn": 17,
+    "world_tick": 350,
+    "reflection_event": 7,
+    "dialog_close": 2
+  },
+  "schema_version": "0.10.0-m7h"
+}
