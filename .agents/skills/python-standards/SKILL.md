@@ -8,7 +8,6 @@ description: >
   snake_case/PascalCase の命名、型ヒント必須、ruff format/lint 準拠、
   f-string 優先、from __future__ import annotations 使用が強制される。
   ファイル命名: ollama_adapter.py, ws_client.py など snake_case .py ファイル全般。
-allowed-tools: Read, Edit, Glob, Grep, Bash(ruff *)
 ---
 
 # Python Standards

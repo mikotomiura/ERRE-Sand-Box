@@ -8,9 +8,6 @@ description: >
   nvidia-smi / ollama list を実行して現在の推論状態を動的に確認できる。
   ペルソナ管理・ERRE モード・サンプリングパラメータは persona-erre Skill を参照。
   エラーハンドリング・フォールバックは error-handling Skill を参照。
-context: fork
-agent: Explore
-allowed-tools: Read, Grep, Glob, Bash(ollama *), Bash(curl *), Bash(nvidia-smi *)
 ---
 
 # LLM Inference

@@ -9,7 +9,6 @@ description: >
   ControlEnvelope JSON の受信・パース処理を書く時、
   ui/godot_bridge.py (Python 側) を変更する時にも参照すること。
   godot_project/ 内に Python コードを置くことは禁止 (WebSocket で疎結合)。
-allowed-tools: Read, Grep, Glob
 ---
 
 # Godot GDScript

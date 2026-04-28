@@ -6,9 +6,6 @@ description: >
   最近の変更を把握したい時に使う。git 状態・最近のコミット・
   構築フェーズの進捗 (.steering/_setup-progress.md)・未対応 TODO・
   変更ファイル統計を一括で取得する。セッション開始時の状況把握にも使える。
-context: fork
-agent: Explore
-allowed-tools: Bash(git *), Bash(grep *), Bash(find *), Bash(wc *), Read
 ---
 
 # Project Status
@@ -45,7 +42,7 @@ allowed-tools: Bash(git *), Bash(grep *), Bash(find *), Bash(wc *), Read
 
 ## Skills ディレクトリ
 
-!`ls .Codex/skills/ 2>/dev/null || echo "(no skills yet)"`
+!`ls .agents/skills/ 2>/dev/null || echo "(no skills yet)"`
 
 ## あなたのタスク
 

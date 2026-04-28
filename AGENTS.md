@@ -6,18 +6,20 @@ Codex がセッション開始時に自動で読み込む指示書。
 詳細は `docs/` 配下の各ドキュメントを参照。
 このファイルは **探索の起点** であり、全情報を含むことが目的ではない。
 
-### 命名規約 (重要)
+### Codex 資産の入口 (重要)
 
-本リポジトリは Claude Code と Codex の両方をホストする。Agent 資産は以下の
-2 拠点に分散しており、Codex はこちらを参照する:
+本リポジトリは Claude Code と Codex の両方をホストする。Codex の実運用入口は
+以下に統一する:
 
-- **`.claude/commands/`**: スラッシュコマンド (両 agent 共有)
-- **`.claude/agents/`**: サブエージェント定義 (両 agent 共有)
-- **`.agents/skills/`**: Codex 向け SKILL mirror (Codex はこちらを優先参照)
-- **`.claude/skills/`**: Claude canonical SKILL (Claude のみ参照)
+- **`AGENTS.md`**: セッション開始時のプロジェクト指示
+- **`.codex/config.toml`**: repo-local Codex 設定 (model / hooks / custom agents)
+- **`.codex/hooks.json` + `.codex/hooks/`**: Codex lifecycle hook
+- **`.codex/agents/`**: Codex custom agent 定義
+- **`.agents/skills/`**: Codex 向け Skill
 
-`.Codex/` というディレクトリは存在しない (旧 docs の typo)。
-詳細は `.steering/20260428-codex-addendum-followup/decisions.md` D3。
+`.claude/commands/`, `.claude/agents/`, `.claude/skills/`, `.claude/hooks/` は
+Claude Code 側の canonical 資産であり、Codex では移植元リファレンスとして扱う。
+Codex からタスクワークフローを起動する時は `$erre-workflow` を使う。
 
 ## プロジェクト概要
 
@@ -31,16 +33,17 @@ Codex がセッション開始時に自動で読み込む指示書。
 
 タスク開始時、以下を **この順** で実行すること。
 
-1. **コマンド選定**: `.claude/commands/` を確認し、該当するスラッシュコマンド
-   (`/start-task`, `/add-feature`, `/fix-bug`, `/refactor` 等) があれば **必ず起動**する
+1. **ワークフロー選定**: 実装・設計・レビュー・完了処理は `$erre-workflow`
+   (`.agents/skills/erre-workflow/SKILL.md`) を入口にする
 2. **Skill 参照**: 該当 Skill があれば `.agents/skills/[name]/SKILL.md` を Read してから着手
-3. **サブエージェントへの委譲**:
-   - 複数ファイル横断の探索 → `file-finder`
-   - 影響範囲調査 → `impact-analyzer`
-   - コードレビュー → `code-reviewer`
-   - テスト実行 → `test-runner`
-   - セキュリティ確認 → `security-checker`
-4. **破壊と構築の判断**: 高難度の設計判断では `/reimagine` で初回案を破棄し再生成案と比較
+3. **サブエージェントへの委譲**: ユーザーが delegation / parallel agent work を
+   明示した場合のみ `.codex/agents/` の custom agent を使う
+   - 複数ファイル横断の探索 → `erre_explorer`
+   - 影響範囲調査 → `erre_impact_analyzer`
+   - コードレビュー → `erre_reviewer`
+   - テスト実行 → `erre_test_runner`
+   - セキュリティ確認 → `erre_security_checker`
+4. **破壊と構築の判断**: 高難度の設計判断では `$erre-workflow` の reimagine 手順で初回案を破棄し再生成案と比較
 5. **Skill の品質検証**: エージェントが Skill の指示通りに動かない、同じ Skill を使った
    タスクで繰り返し問題が起きる、Skill の記述が古くなった疑いがある場合は
    `empirical-prompt-tuning` Skill を起動し、新規 subagent で客観的に検証・改善する。
@@ -72,12 +75,12 @@ Codex がセッション開始時に自動で読み込む指示書。
 
 ## コンテキスト管理
 
-- **50% ルール**: 使用率 50% 超で次の区切りに `/smart-compact`
+- **50% ルール**: 使用率 50% 超で次の区切りに `/compact`
 - **タスク切り替え時**: `/compact` ではなく `/clear`
-- **Plan mode 必須**: 設計判断・新機能・リファクタリングの**最初の段階**は必ず Plan mode
-  (`Shift+Tab` 2回) + Opus。Plan 承認前の実装着手は禁止。auto mode でも Plan を飛ばさない
-- **Plan 内 /reimagine 必須**: 高難度設計（アーキテクチャ / 公開 API / 難しいバグ /
-  複数案ありうる設計）では Plan mode 内で `/reimagine` を必ず発動し、初回案を意図的に
+- **Plan mode 必須**: 設計判断・新機能・リファクタリングの**最初の段階**は必ず Codex Plan mode
+  (`/plan-mode`) + `gpt-5.5` / `xhigh`。Plan 承認前の実装着手は禁止。auto mode でも Plan を飛ばさない
+- **Plan 内 reimagine 必須**: 高難度設計（アーキテクチャ / 公開 API / 難しいバグ /
+  複数案ありうる設計）では Plan mode 内で `$erre-workflow` の reimagine 手順を発動し、初回案を意図的に
   破棄してゼロから再生成した案と並べて比較する。単発 Plan エージェント 1 発で設計を確定しない
 - **Plan → Clear → Execute ハンドオフ**: Plan 承認後、context 使用率が 30% を超えていたら
   `/clear` で切り、次セッションで plan ファイル + `.steering/<task>/design-final.md` を
@@ -87,10 +90,10 @@ Codex がセッション開始時に自動で読み込む指示書。
 
 | タスク | モデル |
 |---|---|
-| Plan Mode・設計判断 | Opus |
-| 実装・テスト・リファクタ | Sonnet |
-| リネーム・フォーマット | Haiku |
-| 大規模変更 (10ファイル以上) | Sonnet[1m] |
+| Plan Mode・設計判断 | `gpt-5.5` + `xhigh` |
+| 実装・テスト・リファクタ | `gpt-5.5` + `medium/high` |
+| 探索・テスト実行 subagent | `gpt-5.4-mini` |
+| レビュー・セキュリティ subagent | `gpt-5.5` + `high` |
 
 ## 禁止事項
 
@@ -103,10 +106,12 @@ Codex がセッション開始時に自動で読み込む指示書。
 - クラウド LLM API を必須依存にしない (予算ゼロ制約)
 - `main` ブランチに直接 push しない
 - Plan mode 外で設計判断を確定しない（設計 → 実装の境界を Plan 承認で明示化する）
-- 高難度設計で `/reimagine` を省略しない（同一エージェントの 1 発案は構造的にバイアスが残る）
+- 高難度設計で reimagine 手順を省略しない（同一エージェントの 1 発案は構造的にバイアスが残る）
 
 ## コマンド・エージェント
 
-- コマンド一覧: `.claude/commands/` を参照 (両 agent 共有)
-- サブエージェント一覧: `.claude/agents/` を参照 (両 agent 共有)
-- スキル一覧: `.agents/skills/` を参照 (Codex 向け mirror)
+- Codex workflow: `.agents/skills/erre-workflow/SKILL.md`
+- Codex custom agents: `.codex/agents/`
+- Codex hooks/config: `.codex/hooks.json`, `.codex/hooks/`, `.codex/config.toml`
+- Codex skills: `.agents/skills/`
+- Claude Code reference assets: `.claude/` (Codex の実行入口ではない)

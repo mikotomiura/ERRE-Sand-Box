@@ -9,7 +9,6 @@ description: >
   認知科学的根拠 (DMN/vagal tone/守破離) の正確性を確認したい時に自動召喚される。
   推論バックエンドの構成は llm-inference Skill を参照。
   サンプリングパラメータの適用コード (クランプ含む) は error-handling Skill の examples.md を参照。
-allowed-tools: Read, Grep, Glob
 ---
 
 # Persona & ERRE Mode
