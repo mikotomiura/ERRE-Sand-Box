@@ -22,7 +22,8 @@
 ### Lint / Format
 - ruff で lint + format を一元化
 - `pyproject.toml` の `[tool.ruff]` セクションで設定
-- pre-commit hook で commit 時に自動検証
+- 現状 manual: `uv run ruff check src tests` + `uv run ruff format --check src tests` を commit 前に実行
+- 自動化 (pre-commit hook + GitHub Actions CI) は未導入、`.steering/20260428-ci-pipeline-setup/` で起票予定 (codex addendum D7)
 
 ### Python 固有
 - Python 3.11 を使用 (``.python-version`` で pin)
@@ -79,12 +80,17 @@ Refs: .steering/20260420-reflection-window/
 
 ### テストの種類
 
-| 種類 | 範囲 | フレームワーク | 実行頻度 |
+| 種類 | 範囲 | フレームワーク | 実行頻度 (現状) |
 |---|---|---|---|
-| 単体テスト | 個々の関数・クラス | pytest | 毎コミット (pre-commit) |
-| 統合テスト | モジュール間連携 (memory + cognition 等) | pytest-asyncio | CI (push/PR) |
-| E2E テスト | 1体エージェントの認知サイクル完走 | pytest-asyncio | 手動 / CI |
-| 埋め込みプレフィックステスト | 検索/文書プレフィックスの正確性 | pytest | CI |
+| 単体テスト | 個々の関数・クラス | pytest | manual (`uv run pytest`)、コミット前推奨 |
+| 統合テスト | モジュール間連携 (memory + cognition 等) | pytest-asyncio | manual、PR レビュー前 |
+| E2E テスト | 1体エージェントの認知サイクル完走 | pytest-asyncio | manual |
+| 埋め込みプレフィックステスト | 検索/文書プレフィックスの正確性 | pytest | manual |
+
+> **現状実装スナップショット (last verified 2026-04-28)**: pre-commit hook と
+> GitHub Actions CI は未導入。`.steering/20260428-ci-pipeline-setup/` で導入を
+> 起票予定 (codex addendum D7)。導入完了後は本表の「実行頻度」列を "pre-commit"
+> "CI (push/PR)" に戻す。
 
 ### テストの書き方
 - テストファイルは `tests/` 配下に `src/` のミラー構造で配置
@@ -98,10 +104,11 @@ Refs: .steering/20260420-reflection-window/
 
 ## 4. レビュー基準
 
-### 必須チェック (CI で自動化)
-- [ ] `ruff check` が通る
-- [ ] `ruff format --check` が通る
-- [ ] `pytest` が通る
+### 必須チェック (現状 manual、`.steering/20260428-ci-pipeline-setup/` で CI 化予定)
+- [ ] `uv run ruff check src tests` が通る
+- [ ] `uv run ruff format --check src tests` が通る
+- [ ] `uv run mypy src` が通る
+- [ ] `uv run pytest` が通る
 - [ ] 型ヒントが付与されている
 
 ### 手動チェック (セルフレビュー / Claude Code `/review`)

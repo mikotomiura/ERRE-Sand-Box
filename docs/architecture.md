@@ -2,14 +2,28 @@
 
 ## 1. アーキテクチャ概要
 
-### 全体図
+### 現状実装スナップショット (last verified 2026-04-28)
+
+> 本節は実装と一致している事実のみを記す。未実装・将来計画は §1 全体図と §2 表で
+> ``[planned]`` ラベル付きで区別する。docs drift を避けるため、main の HEAD が動いた
+> 時点で本節の verified 日付を更新する運用とする (codex addendum D5 + 「現状 snapshot」
+> 提案による)。
+
+- **G-GEAR OS**: Windows native (旧 docs の Linux / Win+WSL2 表記は研究計画段階の想定。実環境は Win native)
+- **推論 (実)**: Ollama 上の `qwen3:8b` (GGUF Q5_K_M, ~5.2GB)。SGLang は M7 移行検討、vLLM は M9 (LoRA) 計画
+- **埋め込み (実)**: `nomic-embed-text` (768d) — `src/erre_sandbox/memory/embedding.py:43-44` で `DEFAULT_MODEL` / `DEFAULT_DIM` 定義
+- **WebSocket route (実)**: `/ws/observe` — `src/erre_sandbox/integration/gateway.py:732` で `app.add_api_websocket_route`。`/stream` は記録上の旧 path 案で実装されていない
+- **Godot (実)**: 4.6.x (MIT)。`/opt/homebrew/bin/godot` 4.6.2.stable.official で headless boot 済 (PR #111 F4 検証)
+- **Contracts レイヤー (実)**: `src/erre_sandbox/contracts/` (PR #111 で導入、F5)。`schemas.py` と並ぶ ui-allowable boundary
+
+### 全体図 (現状 + planned 混在表記)
 
 ```
-┌─── G-GEAR (Linux / Win+WSL2, RTX 5060 Ti 16GB) ───────────────────┐
+┌─── G-GEAR (Windows native, RTX 5060 Ti 16GB) ─────────────────────┐
 │ [Inference Layer]                                                   │
-│   SGLang server (本番) / Ollama (開発)                              │
-│   1 base model (Qwen3-8B or Llama-3.1-Swallow-8B, Q5_K_M)         │
-│   RadixAttention × 8-10 persona × prefix KV 共有                   │
+│   Ollama (現状) / SGLang (M7+ 計画) / vLLM (M9+ LoRA)              │
+│   base model: qwen3:8b (GGUF Q5_K_M)                               │
+│   RadixAttention × 3 persona × prefix KV 共有 [planned: SGLang 移行で]│
 │   (将来) LoRA per persona via vLLM --enable-lora                    │
 │                                                                     │
 │ [Simulation Layer]                                                  │
@@ -18,12 +32,16 @@
 │                                                                     │
 │ [Memory Layer]                                                      │
 │   sqlite-vec (.db 単一ファイル, MIT)                                │
-│   + multilingual-e5-small (384d) or Ruri-v3-30m                    │
+│   + nomic-embed-text (768d) [現状] / Ruri-v3-30m [候補]            │
 │   Per-agent スコープ + shared world スコープ                        │
+│                                                                     │
+│ [Contracts Layer] (2026-04-28 codex F5)                             │
+│   Pydantic config models (M2_THRESHOLDS 等)                         │
+│   ui / integration / evidence など複数層が schemas.py と並んで参照  │
 │                                                                     │
 │ [Gateway]                                                           │
 │   FastAPI + uvicorn + websockets                                    │
-│   ws://g-gear.local:8000/stream                                     │
+│   ws://g-gear.local:8000/ws/observe                                 │
 └─────────────────────────────────────────────────────────────────────┘
                           ↕ WebSocket (JSON / msgpack)
 ┌─── MacBook Air M4 (macOS, arm64) ──────────────────────────────────┐
@@ -32,8 +50,8 @@
 │   ERRE DSL interpreter (shu/ha/ri, peripatos, chashitsu FSM)       │
 │                                                                     │
 │ [Viz]                                                               │
-│   Godot 4.4 (MIT) 3D viewer                                        │
-│   Streamlit / FastAPI + HTMX dashboard                              │
+│   Godot 4.6 (MIT) 3D viewer                                         │
+│   Streamlit / FastAPI + HTMX dashboard [planned]                    │
 │                                                                     │
 │ [Research Tools]                                                    │
 │   Jupyter notebooks (replay, metric computation)                    │
@@ -60,12 +78,12 @@
 | LLM 推論 (将来) | vLLM | 最新 | LoRA 動的切替 (--enable-lora) |
 | ベースモデル | Qwen3-8B / Llama-3.1-Swallow-8B | Q5_K_M | 16GB VRAM に収まる日本語強モデル |
 | ベクトル DB | sqlite-vec | 最新 | 単一ファイル、~500MB RAM、MIT |
-| 埋め込み | multilingual-e5-small (384d) / Ruri-v3-30m | 最新 | 日本語優勢なら Ruri、JA/EN 均衡なら e5 |
-| 3D エンジン | Godot 4.4 | 4.4 | MIT、NavMesh・Skeletal animation 完備 |
-| ダッシュボード | Streamlit / FastAPI + HTMX | 最新 | ブラウザから直接可視化 |
+| 埋め込み (現状) | nomic-embed-text | 768d | Ollama 経由で実装済 (`memory/embedding.py:43-44`)。日本語精度を要する場合は Ruri-v3-30m / multilingual-e5-small が候補 [planned]|
+| 3D エンジン | Godot 4.6 | 4.6.2 | MIT、NavMesh・Skeletal animation 完備 (旧 docs の 4.4 表記を実態に更新) |
+| ダッシュボード | Streamlit / FastAPI + HTMX | [planned] | ブラウザから直接可視化、現状は ui/dashboard/ 内 server-side aggregation のみ実装 |
 | 研究ツール | Jupyter | 最新 | リプレイ・指標計算 |
 | ドキュメント | MkDocs Material + mkdocstrings | 最新 | JA/EN 併記対応 |
-| CI | GitHub Actions | - | uv sync --frozen → ruff → pytest |
+| CI | (現状なし) | [planned] | `.steering/20260428-ci-pipeline-setup/` で起票予定。manual で `uv run ruff check src tests / ruff format --check src tests / mypy src / pytest` を実行 (README §Getting started 参照) |
 
 ## 3. レイヤー構成
 
