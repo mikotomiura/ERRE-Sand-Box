@@ -2,17 +2,18 @@
 description: >
   ワークフロー型のスラッシュコマンド群を .claude/commands/ 配下に構築する。
   start-task, add-feature, fix-bug, refactor, reimagine, review-changes,
-  smart-compact, finish-task の 8 つのコマンドを 1 ファイルずつ承認を得ながら作成する。
-  各コマンドは Phase 3-4 で作成された Skill と Agent を組み合わせて呼び出す。
+  smart-compact, finish-task の 8 つの基本コマンドを 1 ファイルずつ承認を得ながら作成する。
+  Phase 5 (Codex 連携) を実施した場合のみ /cross-review を追加する。
+  各コマンドは Phase 4 (Skill) と Phase 6 (Agent) で作成されたものを組み合わせて呼び出す。
   特に /add-feature, /fix-bug, /refactor は implementation-workflow Skill を
   参照する薄い構造とし、共通骨格の重複を排除する。
   /setup-agents の完了後に実行する。
-allowed-tools: Read, Write, Glob, Bash(mkdir *), Bash(ls *)
+allowed-tools: Read, Write, Glob, Bash(mkdir *), Bash(ls *), Bash(cat *)
 ---
 
 # /setup-commands — スラッシュコマンド群構築コマンド
 
-> Phase 5 of 7. Let's think step by step.
+> Phase 7 of 9. Let's think step by step.
 
 ## 環境チェックブロック
 
@@ -22,16 +23,20 @@ allowed-tools: Read, Write, Glob, Bash(mkdir *), Bash(ls *)
 cat .steering/_setup-progress.md
 ```
 
-Phase 4 完了を確認。
+Phase 6 完了を確認。Phase 5 (`/setup-codex-bridge`) の状態 (完了 / `[~] skipped`) も把握:
+
+- **Phase 5 完了** + Phase 6 で cross-reviewer エージェント存在 → `/cross-review` を本コマンドで作成
+- **Phase 5 skipped** → `/cross-review` は作成しない (8 コマンドのみ)
 
 ### Check 2: Skill と Agent の存在
 
 ```bash
 ls .claude/skills/
 ls .claude/agents/
+ls .claude/agents/cross-reviewer.md 2>/dev/null && echo "[ok] cross-reviewer available"
 ```
 
-両方が存在することを確認。Commands はこれらを呼び出す。
+基本 Skill / Agent が存在することを確認。Commands はこれらを呼び出す。`cross-reviewer` が存在する場合のみ `/cross-review` を作成する。
 
 ### Check 3: コンテキスト予算
 
@@ -58,7 +63,7 @@ ls .claude/agents/
 ### 5. 共通骨格は Skill に切り出す（DRY の要）
 
 `/add-feature`, `/fix-bug`, `/refactor` に共通する「調査→設計→実装→テスト→レビュー」の
-骨格は **コマンドに繰り返し書かない**。Phase 3 で作成した `implementation-workflow` Skill に
+骨格は **コマンドに繰り返し書かない**。Phase 4 で作成した `implementation-workflow` Skill に
 一元化し、各コマンドはそれを参照した上で **自分固有の制約・順序変更だけを書く**。
 これによりコマンドファイルは薄く保たれ、ワークフロー変更時の修正箇所も1つで済む。
 
@@ -80,11 +85,11 @@ ls .claude/commands/
 mkdir -p .claude/commands
 ```
 
-### Step 3: 8 つのコマンドを 1 つずつ作成
+### Step 3: 8 + 1 (任意) のコマンドを 1 つずつ作成
 
 > **重要**: 必ず 1 つずつ作成し、各コマンド完成後に **(a) ユーザー承認** + **(b) Grill me ステップ** を実施。
 
-順序: `/start-task` → `/add-feature` → `/fix-bug` → `/refactor` → `/reimagine` → `/review-changes` → `/smart-compact` → `/finish-task`
+順序: `/start-task` → `/add-feature` → `/fix-bug` → `/refactor` → `/reimagine` → `/review-changes` → `/smart-compact` → `/finish-task` → `/cross-review` (任意・cross-reviewer エージェント存在時のみ)
 
 #### 3.1 `/start-task`
 
@@ -839,6 +844,139 @@ type の選択肢:
 
 ユーザー承認 + Grill me。
 
+#### 3.9 `/cross-review` (任意・Phase 5 完了 + cross-reviewer エージェント存在時のみ)
+
+> **Skip 条件**: `.claude/agents/cross-reviewer.md` が存在しない場合 (Phase 5 skip した場合) はこのコマンドを作成しない。Step 4 (全コマンド整合性レビュー) に進む。
+
+Claude (`code-reviewer`) と Codex (`codex-review` Skill) で同じ git diff を独立にレビューさせ、結果を比較して統合レポートを返すコマンド。`cross-reviewer` エージェント経由。
+
+```markdown
+---
+description: >
+  Claude と Codex で同じ変更を独立にレビューさせ、両者の結果を比較した統合レポートを返す。
+  リリース直前 / セキュリティ関連 / 重要 PR で第二意見が欲しい時に使う。
+  予算ガード (codex-budget-guard hook) と機密フィルタ (secrets-pre-filter hook、
+  scripts/secrets-filter.sh) は呼び出し前に効いている前提。proprietary plugin 出力 /
+  機密情報を含む diff には適用しない。
+allowed-tools: Bash(git *), Bash(jq *), Read, Task
+---
+
+# /cross-review — Claude + Codex 並列レビュー
+
+## このコマンドの目的
+
+Claude の自己バイアスを Codex の独立視点で補正する。重要 PR で「両方が一致して指摘した問題」を最優先で対処することで、レビュー品質を担保する。
+
+## 起動条件
+
+- 重要 PR (リリース直前、セキュリティ関連、proprietary 列除く) のレビュー
+- ユーザーが「両方の視点で見て」と明示
+- code-reviewer 単独レビューに不安がある時
+
+## 適用しないケース
+
+- diff が proprietary plugin 出力 (`*.pdf` / `*.docx` / `*.xlsx` / `*.pptx`) を含む
+- diff が機密情報 (`.env`, `*.pem`, `*.key`, `*credentials*`) を含む
+- `docs/external-skills.md` で「外部 LLM 送信禁止」となっている Skill 配下のファイルを含む
+- Phase 5 (`/setup-codex-bridge`) を skip した (`cross-reviewer` 不在)
+
+## 実行フロー
+
+### Step 1: 対象 diff の確定とサイズ判定
+
+\`\`\`bash
+LINES=$(git diff --stat | tail -1 | awk '{print $4+$6}')
+FILES=$(git diff --name-only | wc -l)
+
+# 閾値読み込み
+THRESHOLD=$(jq -r '.diff_size_threshold_lines' .codex/budget.json)
+MANUAL_APPROVAL=$(jq -r '.manual_approval_threshold_lines' .codex/budget.json)
+\`\`\`
+
+### Step 2: Proprietary / 機密混入チェック (fail-closed)
+
+\`\`\`bash
+if git diff --name-only | grep -E '\.(pdf|docx|xlsx|pptx|env|pem|key)$|credentials|secret'; then
+  echo "[/cross-review] BLOCKED: diff contains proprietary or sensitive files"
+  echo "code-reviewer 単独に切り替えてください"
+  exit 1
+fi
+\`\`\`
+
+### Step 3: 行数閾値による分岐
+
+\`\`\`text
+if LINES > MANUAL_APPROVAL_THRESHOLD (デフォルト 2000):
+    ユーザーに「[N] 行 diff です。Codex に渡してよいですか?」と承認確認
+    "n" の場合は exit 0 (code-reviewer 単独でフォールバック)
+elif LINES > DIFF_SIZE_THRESHOLD (デフォルト 500):
+    ユーザーに警告だけ表示して進む
+else:
+    自動進行
+\`\`\`
+
+### Step 4: 予算チェック
+
+\`\`\`bash
+TODAY=$(date +%Y-%m-%d)
+USED=$(jq -r --arg d "$TODAY" 'if .today.date == $d then .today.tokens_used else 0 end' .codex/budget.json)
+BUDGET=$(jq -r '.daily_token_budget' .codex/budget.json)
+PER_INV=$(jq -r '.per_invocation_max' .codex/budget.json)
+
+if [ $((BUDGET - USED)) -lt "$PER_INV" ]; then
+  echo "[/cross-review] BLOCKED: daily budget would be exceeded"
+  echo "code-reviewer 単独に切り替えてください"
+  exit 1
+fi
+\`\`\`
+
+### Step 5: cross-reviewer エージェントの起動
+
+\`\`\`text
+Task(cross-reviewer): 「git diff の現在の変更を Claude と Codex で並列にレビューし、
+統合レポートを返してください。両者の指摘の一致 / 乖離を分類した上で優先度判定を付ける。」
+\`\`\`
+
+`cross-reviewer` 内部で:
+
+1. `code-reviewer` を Task で並列起動 (Claude のレビュー)
+2. `codex-review` Skill を Bash で並列起動 (Codex のレビュー)
+3. 両結果を比較・分類して統合レポート生成
+
+### Step 6: 結果の表示と次アクション
+
+統合レポートをユーザーに提示。レポートには:
+
+- **両者一致 (HIGH priority)**: 即対応推奨の指摘
+- **Claude のみ**: 採用 / 却下 / 要確認の判定付き
+- **Codex のみ**: 採用 / 却下 / 要確認の判定付き
+- **推奨アクション**: 優先度順の対処リスト
+
+ユーザーが対処を進める (修正→ `/cross-review` 再実行)、または採用 / 却下を確定して終了。
+
+## トークン使用量の更新
+
+`.codex/budget.json` の更新は `codex-review` Skill 内部で完結 (atomic + flock)。本コマンドは追加更新しない。
+
+## 関連
+
+- `cross-reviewer` エージェント (.claude/agents/cross-reviewer.md)
+- `codex-review` Skill (.claude/skills/codex-review/SKILL.md)
+- `code-reviewer` エージェント (.claude/agents/code-reviewer.md)
+- `.codex/budget.json` — 予算管理
+- Phase 8 で生成される `codex-budget-guard` / `secrets-pre-filter` hook が二重防衛として効く
+
+## アンチパターン
+
+- ❌ proprietary / 機密混入チェックを skip
+- ❌ 予算チェックを skip
+- ❌ Phase 5 skip 状態で本コマンドを呼ぶ (cross-reviewer 不在)
+- ❌ 結果を盲信する (両者一致 HIGH でも誤検知の可能性、code-reviewer の context 不足由来かもしれない)
+- ❌ 自動 commit する (人間の判断を必ず挟む)
+```
+
+ユーザー承認 + Grill me。
+
 ### Step 4: 全コマンドの整合性レビュー
 
 ```bash
@@ -857,12 +995,12 @@ ls -la .claude/commands/
 
 ### Step 5: 進捗ファイルの更新
 
-`.steering/_setup-progress.md` の Phase 5 を完了マーク + 相互参照マップ更新:
+`.steering/_setup-progress.md` の Phase 7 を完了マーク + 相互参照マップ更新:
 
 ```markdown
-- [x] **Phase 5: /setup-commands** — ワークフローコマンド群
+- [x] **Phase 7: /setup-commands** — ワークフローコマンド群
   - 完了日時: [YYYY-MM-DD HH:MM]
-  - 作成コマンド:
+  - 作成コマンド (8 + N、N = Phase 5 完了時 1):
     - /start-task
     - /add-feature
     - /fix-bug
@@ -871,10 +1009,12 @@ ls -la .claude/commands/
     - /review-changes
     - /smart-compact
     - /finish-task
+    - /cross-review ← Phase 5 完了時のみ
 
 ### Skill → Command 参照
 - implementation-workflow → /add-feature, /fix-bug, /refactor（共通骨格）
 - test-standards → /add-feature, /fix-bug, /refactor（Step F/tasklist 参照）
+- codex-review → /cross-review (Phase 5 完了時のみ)
 
 ### Agent → Command 参照
 - file-finder → implementation-workflow 経由で /add-feature, /fix-bug, /refactor
@@ -884,18 +1024,20 @@ ls -la .claude/commands/
 - test-runner → implementation-workflow 経由で全実装系 + /refactor の交互実行 + /finish-task
 - test-analyzer → implementation-workflow 経由で /add-feature, /fix-bug
 - log-analyzer → /fix-bug (Step 2b)
+- cross-reviewer → /cross-review (Phase 5 完了時のみ)
 ```
 
 ### Step 6: 完了通知
 
 ```
-Phase 5 完了です。
+Phase 7 完了です。
 
-作成したコマンド: 8 個
+作成したコマンド: 8 + N 個 (N = Phase 5 完了時 1)
 - ライフサイクル: /start-task, /finish-task
 - ワークフロー: /add-feature, /fix-bug, /refactor
 - 品質担保: /reimagine（破壊と構築）, /review-changes
 - ユーティリティ: /smart-compact
+- 並列レビュー: /cross-review (Phase 5 完了時のみ)
 
 共通骨格は implementation-workflow Skill に集約済み。
 各ワークフローコマンドは薄い参照型。
@@ -908,7 +1050,9 @@ Phase 5 完了です。
 
 ## 完了条件
 
-- [ ] 8 つのコマンドすべてが作成されている
+- [ ] 8 つの基本コマンドすべてが作成されている
+- [ ] Phase 5 完了時のみ /cross-review が追加で作成されている (cross-reviewer エージェント存在前提)
+- [ ] Phase 5 skip 時は /cross-review を作っていない
 - [ ] 各コマンドに明確な実行フローが記述されている
 - [ ] 各コマンドが適切に Skill と Agent を呼び出している
 - [ ] `/add-feature`, `/fix-bug`, `/refactor` が implementation-workflow Skill を参照する薄い構造になっている

@@ -9,7 +9,7 @@ allowed-tools: Read, Write, Glob, Grep, Bash(git *), Bash(cat *), Task
 
 # /setup-docs — 永続ドキュメント構築コマンド
 
-> Phase 1 of 7. Let's think step by step.
+> Phase 1 of 9. Let's think step by step.
 > このコマンドは後続のすべての構築物の基盤となるドキュメントを作成する。
 > 妥協しない。
 
@@ -556,7 +556,7 @@ Refs: .steering/[YYYYMMDD]-[task-name]/
     - [Step 4 の整合性レビューで重要だった点]
 ```
 
-「次に実行すべきコマンド」を `/setup-claude-md` に更新。
+「次に実行すべきコマンド」を `/setup-marketplace` に更新 (Phase 2、anthropics/skills 公式 plugin 導入)。Codex 連携や marketplace を skip するプロジェクトはここで `/setup-claude-md` に飛ばしてよいが、`docs/external-skills.md` を Phase 3 で空テンプレ生成する契約は守る。
 
 ### Step 6: 完了通知
 
@@ -574,8 +574,8 @@ Phase 1 完了です。
 
 次のステップ:
 1. このセッションを `/clear` でリセット
-2. `/model opus` を維持（Phase 2 も Opus 推奨）
-3. `/setup-claude-md` を実行
+2. `/model sonnet` に切り替え（Phase 2 は marketplace 選択判断のため Sonnet で十分）
+3. `/setup-marketplace` を実行 (公式 Skill 導入。skip する場合は `/setup-claude-md` に飛ぶ)
 
 進捗は .steering/_setup-progress.md で確認できます。
 ```
