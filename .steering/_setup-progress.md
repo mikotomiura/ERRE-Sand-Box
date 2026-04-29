@@ -90,11 +90,36 @@
     - .claude/hooks/pre-edit-banned.sh
     - .claude/hooks/post-fmt.sh
     - .claude/hooks/stop-check.sh
-- [x] **Phase 7: /verify-setup** — 整合性検証
+- [x] **Phase 7: /verify-setup** — 整合性検証 (旧 8 段階体系)
   - 完了日時: 2026-04-18
   - 検証結果: HEALTHY
   - 修正が必要な項目: 3 件 (すべて LOW、運用上問題なし)
   - レポート: .steering/_verify-report-20260418.md
+- [x] **Phase 9: /verify-setup** — 整合性検証 (新 10 段階体系での再実行)
+  - 完了日時: 2026-04-29 14:30
+  - 検証結果: WARNINGS (HIGH 1 / MEDIUM 5 / LOW 2、CRITICAL なし、日常運用は HEALTHY)
+  - Phase 2 状態: skipped (公式 plugin 未導入 / `docs/external-skills.md` 不在)
+  - Phase 5 状態: 代替レイアウトで完了 (PR #114 — `.codex/agents/*.toml` + `.codex/hooks/*.py` + `.agents/skills/`、新仕様の `.claude/skills/codex-{consult,review,rescue}/` は不在で正)
+  - Codex 疎通: ✅ PASS (`codex exec` 17.2k tokens, "Hello" 応答)
+  - AGENTS↔CLAUDE 同期: N/A (`docs/agent-shared.md` 不在)
+  - ライセンス整合: N/A (`docs/external-skills.md` 不在)
+  - レポート: .steering/_verify-report-20260429.md
+  - 主要 finding: 進捗ファイル自体が旧 Phase 0-7 体系のままで、新 10 段階体系との対応マップがない (HIGH 1 件)
+
+## Phase 番号 旧 → 新 マッピング (2026-04-29 verify-setup 再実行で導入)
+
+| 旧 (本ファイル) | 新 (新 bootstrap.md) | 内容 |
+|---|---|---|
+| Phase 0 | Phase 0 | bootstrap |
+| Phase 1 | Phase 1 | docs |
+| — | Phase 2 (新規) | marketplace (本リポ skip) |
+| Phase 2 | Phase 3 | claude-md (本リポは agent-shared.md 不採用) |
+| Phase 3 | Phase 4 | skills |
+| — | Phase 5 (新規) | codex-bridge (本リポは PR #114 代替レイアウト採用) |
+| Phase 4 | Phase 6 | agents |
+| Phase 5 | Phase 7 | commands |
+| Phase 6 | Phase 8 | hooks |
+| Phase 7 | Phase 9 | verify |
 
 ## 次に実行すべきコマンド
 

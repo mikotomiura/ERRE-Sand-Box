@@ -9,7 +9,7 @@ allowed-tools: Read, Write, Glob, Grep, Bash(mkdir *), Bash(ls *), Task
 
 # /setup-skills — Skill 群構築コマンド
 
-> Phase 3 of 7. Let's think step by step.
+> Phase 4 of 9. Let's think step by step.
 
 ## 環境チェックブロック
 
@@ -19,15 +19,16 @@ allowed-tools: Read, Write, Glob, Grep, Bash(mkdir *), Bash(ls *), Task
 cat .steering/_setup-progress.md
 ```
 
-Phase 2 完了を確認。
+Phase 3 完了を確認。
 
 ### Check 2: docs の存在
 
 ```bash
 ls docs/
+ls docs/external-skills.md 2>/dev/null
 ```
 
-5 つのドキュメントが揃っていることを確認。Skill はこれらを参照して作成する。
+5 つのドキュメントが揃っていることを確認。`docs/external-skills.md` (Phase 2 で生成、skip 時は Phase 3 で空テンプレ生成) も Read して、**公式 Skill が既にカバーする領域** を把握する。Skill はこれらを参照して作成する。
 
 ### Check 3: コンテキスト予算
 
@@ -39,7 +40,7 @@ ls docs/
 
 ## 実行フロー
 
-### Step 1: 既存 docs の精査
+### Step 1: 既存 docs の精査と公式 Skill カバレッジ確認
 
 以下のドキュメントを Read で読む（Skill の内容を docs と整合させるため）:
 
@@ -47,7 +48,17 @@ ls docs/
 docs/architecture.md
 docs/development-guidelines.md
 docs/repository-structure.md
+docs/external-skills.md   ← Phase 2 で導入された公式 Skill 一覧 (空テンプレの場合もある)
 ```
+
+**重要**: `docs/external-skills.md` の表から **既にカバーされている領域** をリスト化する。例:
+
+- `pdf` 公式 Skill が導入済み → 自前で「PDF 操作 Skill」を作らない
+- `webapp-testing` 公式 Skill が導入済み → 自前で「E2E テスト Skill」を作らない
+- `skill-creator` 公式 Skill が導入済み → 自前 Skill 作成時の補助役として使う (ただし主導権は本コマンドが持つ)
+- `claude-api` 公式 Skill が導入済み → Claude API 実装パターンを自前 Skill に書かない
+
+Phase 2 を skip して external-skills.md が空テンプレの場合: 全領域を自前で作成する前提で進む。
 
 ### Step 2: 必要な Skill の特定
 
@@ -84,7 +95,16 @@ docs/repository-structure.md
 ### 動的 Skill（Shell Preprocessing 活用）
 8. **project-status** — 現在のプロジェクト状態を動的に取得
 
-合計: [N] 個の Skill
+### 公式 Skill でカバー済み (作らない)
+- PDF 操作 → 公式 `pdf` Skill (Phase 2 で導入済) を使う
+- Excel / Word / PowerPoint → 公式 `xlsx` / `docx` / `pptx`
+- E2E (Web) テスト → 公式 `webapp-testing`
+- React/Tailwind Artifact → 公式 `web-artifacts-builder`
+- Claude API 実装 → 公式 `claude-api`
+- MCP server 開発 → 公式 `mcp-builder`
+- (Phase 2 を skip した場合、この節は「該当なし」)
+
+合計: 自前 [N] 個 + 公式 [M] 個 = [N+M] 個の Skill が利用可能になる
 ```
 
 ユーザーに「このリストで進めてよいですか?追加・削除があれば指摘してください」と確認。
@@ -254,6 +274,69 @@ Grill me（自己レビュー）では排除できない「書き手のバイア
 `.claude/skills/empirical-prompt-tuning/SKILL.md` を Read で参照し、tier に応じたワークフローで評価・改善を実施する。Full の場合はシナリオ diversity rubric（median / edge-low / edge-high / adversarial のうち 3 象限）、hold-out 最低 2 本、`[critical]` タグ比率 20-40% を遵守する。結果をユーザーに提示して承認を得てから次の Skill へ進む。
 
 **`empirical-prompt-tuning` Skill 自身には Phase H を適用しない**（メタ循環）。代わりに `/reimagine` を Skill ファイルに適用する手順（本 Skill「メタ循環対策」節参照）を使う。
+
+#### Phase H+: Codex 第三者検証 (限定的に発動)
+
+Phase H の subagent dispatch (Claude 内部の別エージェント) ではなく、**外部 LLM (Codex CLI)** に評価させるオプション。Claude のバイアスをより独立した視点で補正する。
+
+**発動条件 (具体化、トリガー方式)**:
+
+以下のいずれかに該当する **重要 Skill のみ** Phase H+ を実施する。「使うかどうかコストと相談」ではなく、トリガーが揃ったら自動的に実施する明確な閾値:
+
+| トリガー | 該当例 | 理由 |
+|---|---|---|
+| `implementation-workflow` 等の **複数コマンドが参照する共通骨格** | `/add-feature`, `/fix-bug`, `/refactor` から呼ばれる Skill | 1 箇所のバグが波及するので独立検証の価値が高い |
+| ユーザーが「特に重要」と明示指定した Skill | プロジェクト固有のドメインルール、規制対応 Skill | プロダクション安全性に直結 |
+| Phase H (Claude 内 subagent dispatch) で Iter 4-7 まで進んでも **収束しない** Skill | description 改善を繰り返しても改善幅が頭打ち | Claude バイアスが原因の可能性。外部視点で打破 |
+| **過去 30 日以内に実問題が発生した** Skill (運用 ↔ セットアップ循環) | 「この Skill 通り作業したのに XXX が起きた」事例あり | 既知バイアスを Codex に検出させる |
+
+**適用前提 (すべて満たす)**:
+
+- Phase 5 (`/setup-codex-bridge`) が完了している (`.codex/config.toml` 存在 + `codex --version` が応答)
+- 対象 Skill の SKILL.md と補足ファイルが **公開可能な抜粋にできる** (proprietary plugin 出力 / 機密情報を含まない、`docs/external-skills.md` の「外部 LLM への送信」列で確認)
+- `.codex/budget.json` の予算余裕が `per_invocation_max * 2` 以上 (`xhigh` reasoning は通常の 1.5-2 倍消費する)
+- ユーザーが追加コスト (Codex API token) を承諾済み
+
+**送信内容の最小化**:
+
+SKILL.md と補足ファイルをそのまま送らず、以下の **公開可能な最小抜粋** に絞る:
+
+1. description (frontmatter) — そのまま
+2. 主要なルール / 原則 (1-2 セクション) — そのまま
+3. 良い例 / 悪い例 — プロジェクト固有名は仮名化 (`UserService` → `XxxService`)
+4. アンチパターン — そのまま
+
+allowed-tools / 補足ファイル全文 / プロジェクト固有のパス参照は **送らない**。Codex には「この Skill は Claude を適切に召喚し、ルールが具体的か?」を判断させる最小情報だけ渡す。
+
+**実施手順**:
+
+1. Skill ファイルから上記 4 要素を抽出して `/tmp/skill-public-excerpt.md` に保存
+2. `scripts/secrets-filter.sh` に通す (exit code 2 (検出) なら中止して原因調査)
+3. ユーザーに preview を見せて送信承認を得る
+4. Codex 呼び出し:
+   ```bash
+   codex exec --json --sandbox read-only --skip-git-repo-check \
+     -m gpt-5.5 -c model_reasoning_effort=xhigh \
+     "以下の Skill 抜粋について、Claude が読んで適切に動けるか批判的に評価してください。
+     観点 (優先度順):
+     1. description の召喚条件 (具体性、トリガー語、ファイル命名パターン)
+     2. ルール / 例の具体性 (「適切に」のような曖昧語の有無)
+     3. アンチパターンの網羅性
+     4. 抜け漏れている観点
+     300 語以内、優先度順に。改善 3 点を必ず最後に箇条書きで。
+     ---
+     $(cat /tmp/skill-public-excerpt.md)"
+   ```
+5. Claude (Phase H subagent) の評価結果と Codex の評価結果を **並べて比較**:
+   - 両者が一致して指摘した問題 → 優先度高、即座に修正
+   - 一方しか指摘しない問題 → false positive 可能性を Claude が判定して採用/却下
+   - Codex のみが指摘した問題で実装に影響しないもの → 記録だけして却下
+6. `.codex/budget.json` の `tokens_used` を更新 (codex-review Skill と同じ atomic update + flock)
+7. `/tmp/skill-public-excerpt.md` を削除 (`trap` で確実に)
+
+**Skip する場合**:
+
+トリガー条件に該当しない (大半の Skill) / Phase 5 未実施 / Codex 未認証 / 予算超過 / proprietary 関連 Skill — の場合は Phase H 内部 subagent dispatch のみで完結する (Phase H+ は最初から無いものとして扱う)。
 
 ### Step 4: 動的 Skill の作成（必須・少なくとも 1 つ）
 
@@ -446,12 +529,12 @@ find .claude/skills -name "SKILL.md" -exec wc -l {} \;
 
 ### Step 6: 進捗ファイルの更新
 
-`.steering/_setup-progress.md` の Phase 3 を完了マーク:
+`.steering/_setup-progress.md` の Phase 4 を完了マーク:
 
 ```markdown
-- [x] **Phase 3: /setup-skills** — Skill 群
+- [x] **Phase 4: /setup-skills** — プロジェクト固有 Skill 群（公式 Skill 重複回避済み）
   - 完了日時: [YYYY-MM-DD HH:MM]
-  - 作成 Skill:
+  - 作成 Skill (自前):
     - test-standards (SKILL.md, examples.md)
     - python-standards (SKILL.md, patterns.md, anti-patterns.md)
     - error-handling (SKILL.md, examples.md)
@@ -459,27 +542,36 @@ find .claude/skills -name "SKILL.md" -exec wc -l {} \;
     - project-status (SKILL.md, 動的型)
     ...
   - 動的 Skill 数: [N]
+  - 公式 Skill 重複回避: docs/external-skills.md 参照済み
+  - Phase H で Codex 第三者検証を実施: 重要 Skill [N] 個 / 全 [M] 個 (Phase 5 完了時のみ)
 ```
 
 「構築物の相互参照マップ」セクションに Skill の一覧を記録:
 
 ```markdown
 ### Skill リスト
+自前:
 - test-standards
 - python-standards
 - error-handling
 - git-workflow
 - project-status (動的)
+
+公式 (anthropics/skills 由来):
+- (docs/external-skills.md を参照)
 ```
 
 ### Step 7: 完了通知
 
 ```
-Phase 3 完了です。
+Phase 4 完了です。
 
-作成した Skill: [N] 個
+作成した自前 Skill: [N] 個
 - 静的 Skill: [N] 個
 - 動的 Skill: [N] 個（Shell Preprocessing 使用）
+
+公式 Skill (Phase 2 で導入済): [M] 個
+合計利用可能: [N+M] 個
 
 各 Skill のディレクトリ:
 .claude/skills/
@@ -491,12 +583,14 @@ Phase 3 完了です。
 次のステップ:
 1. `/clear` でリセット
 2. `/model sonnet` を維持
-3. `/setup-agents` を実行
+3. `/setup-codex-bridge` を実行 (Codex CLI 連携を導入する場合)
+   または skip して `/setup-agents` を実行 (Codex 不使用の場合)
 ```
 
 ## 完了条件
 
 - [ ] 計画した数の Skill すべてが作成されている
+- [ ] 公式 Skill (`docs/external-skills.md`) と機能重複している自前 Skill が無い
 - [ ] 各 SKILL.md の description が 5 つの品質基準を満たしている
 - [ ] 各 Skill に最低 1 つの補足ファイルがある
 - [ ] 動的 Skill が最低 1 つ作成されている
@@ -504,7 +598,7 @@ Phase 3 完了です。
 - [ ] `empirical-prompt-tuning` Skill が作成されている
 - [ ] 重要 Skill（`implementation-workflow` 等）で Phase H（Empirical 評価）実施済み
 - [ ] 全体整合性レビュー実施済み
-- [ ] Phase 3 が完了マーク済み
+- [ ] Phase 4 が完了マーク済み
 
 ## アンチパターン
 
