@@ -3,8 +3,8 @@
   "per_invocation_max": 200000,
   "today": {
     "date": "2026-05-01",
-    "used": 109448,
-    "invocations": 1
+    "used": 337503,
+    "invocations": 2
   },
   "policy": {
     "on_overrun": "warn",
@@ -26,6 +26,14 @@
       "tokens": 109448,
       "per_invocation_max_overrun": 0,
       "policy_action": "ok (per_invocation_max=200K 内)"
+    },
+    {
+      "date": "2026-05-01",
+      "task": "20260430-m9-eval-system",
+      "purpose": "P3a Step 1 CLI 設計 review (HIGH 6 / MEDIUM 5 / LOW 3 / Verdict: Proceed after HIGH fixes)",
+      "tokens": 228055,
+      "per_invocation_max_overrun": 28055,
+      "policy_action": "warn (個人プロジェクト規定どおり)"
     }
   ]
 }
