@@ -242,10 +242,10 @@ def load_synthetic_fixture(path: Path) -> list[dict[str, Any]]:
 def _load_stimuli(path: Path) -> list[dict[str, Any]]:
     parsed = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(parsed, dict):
-        raise ValueError(f"{path}: root must parse to a mapping")
+        raise TypeError(f"{path}: root must parse to a mapping")
     stimuli = parsed.get("stimuli")
     if not isinstance(stimuli, list):
-        raise ValueError(f"{path}: missing or non-list 'stimuli' field")
+        raise TypeError(f"{path}: missing or non-list 'stimuli' field")
     return stimuli
 
 
@@ -342,11 +342,11 @@ class GoldenBaselineDriver:
         without touching the production YAML.
         """
         battery = stimuli if stimuli is not None else load_stimulus_battery(persona_id)
-        outcomes: list[StimulusOutcome] = []
-        for cycle_idx in range(1, self.cycle_count + 1):
-            for stimulus in battery:
-                outcomes.append(self.run_stimulus(persona_id, stimulus, cycle_idx))
-        return outcomes
+        return [
+            self.run_stimulus(persona_id, stimulus, cycle_idx)
+            for cycle_idx in range(1, self.cycle_count + 1)
+            for stimulus in battery
+        ]
 
     def run_stimulus(
         self,
@@ -583,11 +583,11 @@ __all__ = [
     "DEFAULT_RUN_COUNT",
     "DEFAULT_SALT",
     "GOLDEN_DIR",
-    "GoldenBaselineDriver",
-    "MCQOutcome",
     "SEEDS_PATH",
     "SEED_MANIFEST_SCHEMA_VERSION",
     "STIMULUS_DIR",
+    "GoldenBaselineDriver",
+    "MCQOutcome",
     "StimulusOutcome",
     "assert_seed_manifest_consistent",
     "build_seed_manifest",
