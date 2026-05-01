@@ -2,13 +2,30 @@
   "daily_token_budget": 1000000,
   "per_invocation_max": 200000,
   "today": {
-    "date": "2026-04-30",
-    "used": 0,
-    "invocations": 0
+    "date": "2026-05-01",
+    "used": 109448,
+    "invocations": 1
   },
   "policy": {
     "on_overrun": "warn",
     "rationale": "個人プロジェクトのため block ではなく warn。チーム運用に拡大する場合は 'block' へ昇格を検討"
   },
-  "history": []
+  "history": [
+    {
+      "date": "2026-04-30",
+      "task": "20260430-m9-eval-system",
+      "purpose": "design.md independent review (HIGH 5 / MEDIUM 6 / LOW 1)",
+      "tokens": 254381,
+      "per_invocation_max_overrun": 54381,
+      "policy_action": "warn (個人プロジェクト規定どおり)"
+    },
+    {
+      "date": "2026-05-01",
+      "task": "20260430-m9-eval-system",
+      "purpose": "P2a 着手前 LOW-1 RoleEval wording 決着 review (MEDIUM 5 / LOW 2 / Verdict: Adopt Option A)",
+      "tokens": 109448,
+      "per_invocation_max_overrun": 0,
+      "policy_action": "ok (per_invocation_max=200K 内)"
+    }
+  ]
 }

@@ -22,13 +22,20 @@ defer 期限と reopen 条件を明示。
 ## M9-B closure では決められない判断事項
 
 ### LIWC 商用 license の最終可否判定
-- **issue**: LIWC-22 は商用 license、ERRE は zero-budget 制約
-- **option A**: 商用 license 取得 (one-time fee 数百ドル)
-- **option B**: Empath OSS 代用 (proxy、psycholinguistic depth は劣る)
-- **option C**: spaCy ベースの custom dictionary 自作 (work cost 大)
-- **option D**: stylometry (Burrows' Delta) のみで persona-fit を測り、Big-Five claim を諦める
-- **defer 先**: M9-eval-system 着手前 (Tier A 実装の前提)
-- **reopen 条件**: いずれかの option が確定
+- **status**: **CLOSED 2026-04-30** — m9-eval-system の Plan 段階で **Option D 採用**
+  (LIWC 全廃、Big5 を IPIP-NEO 自己申告に一本化、Empath は Tier A 副次的 diagnostic
+  のみで Big5 claim には使わない)。商用 license は取得しない。
+- **closure 経路**: m9-eval-system の `design-final.md` §"LIWC alternative: Option D"
+  + `decisions.md` ME-1 (IPIP-NEO fallback trigger ADR) + Codex `gpt-5.5 xhigh`
+  review HIGH/MEDIUM 反映済。詳細根拠は m9-eval-system steering 参照。
+- **issue (履歴)**: LIWC-22 は商用 license、ERRE は zero-budget 制約
+- **option A**: 商用 license 取得 (one-time fee 数百ドル) — 不採用
+- **option B**: Empath OSS 代用 (proxy、psycholinguistic depth は劣る) — 副次採用 (Tier A 1 axis)
+- **option C**: spaCy ベースの custom dictionary 自作 (work cost 大) — 不採用
+- **option D**: stylometry (Burrows' Delta) のみで persona-fit を測り、Big-Five claim
+  を諦める — **採用** (Big5 は IPIP-NEO self-report に移譲)
+- **reopen 条件**: m9-eval-system `decisions.md` ME-1 の fallback trigger fire
+  (ICC < 0.6 が ≥2/3 personas で発生) → BIG5-CHAT regression head 採用検討時のみ
 
 ### Burrows' Delta multi-language strategy 詳細
 - **issue**: Kant 独原典 vs 英訳 vs 日本語 dialog で idiolect 汚染
@@ -96,7 +103,7 @@ defer 期限と reopen 条件を明示。
 
 | 項目 | reopen 条件 | trigger 場所 |
 |---|---|---|
-| LIWC license | option A-D いずれか確定 | M9-eval-system 着手前 |
+| LIWC license | **CLOSED 2026-04-30 (Option D 採用)** — re-open は ME-1 fallback fire 時のみ | (m9-eval-system Plan で確定) |
 | Burrows multi-lang | dialog 言語混在運用 | M9-eval-system reference corpus |
 | Judge bias runbook | judge LLM 確定 | M9-eval-system Tier C 実装 |
 | 専門家 selection | 評価系完成 | M9-C-adopt 直前 |
