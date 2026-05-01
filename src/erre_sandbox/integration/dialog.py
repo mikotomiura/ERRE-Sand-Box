@@ -106,6 +106,7 @@ class InMemoryDialogScheduler:
         envelope_sink: Callable[[ControlEnvelope], None],
         rng: Random | None = None,
         turn_sink: Callable[[DialogTurnMsg], None] | None = None,
+        golden_baseline_mode: bool = False,
     ) -> None:
         self._sink = envelope_sink
         self._rng = rng if rng is not None else Random()  # noqa: S311 — non-crypto
@@ -115,6 +116,14 @@ class InMemoryDialogScheduler:
         # sqlite for later LoRA-training export. Left None for unit tests
         # and the existing lightweight fixtures that have no store.
         self._turn_sink = turn_sink
+        # m9-eval-system P2b (design-final.md §Orchestrator): when True the
+        # external golden baseline driver bypasses cooldown / timeout / zone
+        # restriction so that 70-stimulus battery × 3 cycles can drive the
+        # same agent pair without the natural-dialog admission rules. Public
+        # attribute so the driver can flip it between stimulus phase
+        # (200 turn, mode=True) and natural-dialog phase (300 turn,
+        # mode=False) within the same scheduler instance / MemoryStore.
+        self.golden_baseline_mode: bool = golden_baseline_mode
         self._open: dict[str, _OpenDialog] = {}
         self._pair_to_id: dict[frozenset[str], str] = {}
         # Bounded by C(N, 2) for N agents — M4 targets N≤3 so this cannot
@@ -144,13 +153,23 @@ class InMemoryDialogScheduler:
         """
         if initiator_id == target_id:
             return None
-        if zone not in _REFLECTIVE_ZONES:
+        if zone not in _REFLECTIVE_ZONES and not self.golden_baseline_mode:
+            # m9-eval-system P2b: golden baseline stimulus battery includes
+            # ``Zone.STUDY`` (Kant Wachsmuth/RoleEval, Nietzsche aphoristic
+            # bursts) — bypass the natural-dialog cultural restriction.
             return None
         key = _pair_key(initiator_id, target_id)
         if key in self._pair_to_id:
             return None
         last_close = self._last_close_tick.get(key)
-        if last_close is not None and tick - last_close < self.COOLDOWN_TICKS:
+        if (
+            last_close is not None
+            and tick - last_close < self.COOLDOWN_TICKS
+            and not self.golden_baseline_mode
+        ):
+            # m9-eval-system P2b: 70 stimulus × 3 cycles drives the same pair
+            # repeatedly; cooldown would otherwise serialize them across
+            # ≥ 30-tick gaps and inflate baseline tick range artificially.
             return None
 
         dialog_id = _allocate_dialog_id()
@@ -303,6 +322,12 @@ class InMemoryDialogScheduler:
     # ------------------------------------------------------------------
 
     def _close_timed_out(self, world_tick: int) -> None:
+        if self.golden_baseline_mode:
+            # m9-eval-system P2b: stimulus phase uses long expected_turn_count
+            # (1-3) per stimulus; the driver explicitly closes each dialog so
+            # the natural inactivity timeout is suppressed to avoid races
+            # between driver close and tick() auto-close.
+            return
         expired: list[str] = [
             did
             for did, d in self._open.items()

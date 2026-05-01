@@ -42,9 +42,11 @@ if [ -z "$TASK_DIR" ]; then
 fi
 
 # 必須 3 ファイルの存在チェック
+# design は /reimagine 完了後に design.md → design-final.md に rename される
+# 運用があるため、両方のいずれかが存在すれば満たす。
 MISSING=""
 [ ! -f "$TASK_DIR/requirement.md" ] && MISSING="$MISSING requirement.md"
-[ ! -f "$TASK_DIR/design.md" ] && MISSING="$MISSING design.md"
+[ ! -f "$TASK_DIR/design.md" ] && [ ! -f "$TASK_DIR/design-final.md" ] && MISSING="$MISSING design.md"
 [ ! -f "$TASK_DIR/tasklist.md" ] && MISSING="$MISSING tasklist.md"
 
 if [ -n "$MISSING" ]; then

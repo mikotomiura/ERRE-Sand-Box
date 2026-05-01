@@ -26,23 +26,31 @@ if [ -z "$TASK_DIR" ]; then
 fi
 
 # 必須 3 ファイルの存在カウント
+# design は /reimagine 完了後に design.md → design-final.md に rename される
+# 運用があるため、両方のいずれかが存在すれば満たす。
 FILE_COUNT=0
 MISSING=""
-for f in requirement.md design.md tasklist.md; do
+for f in requirement.md tasklist.md; do
     if [ -f "$TASK_DIR/$f" ]; then
         FILE_COUNT=$((FILE_COUNT + 1))
     else
         MISSING="$MISSING $f"
     fi
 done
-
-# design.md テンプレート残存検出
-DESIGN_NOTE=""
-if [ -f "$TASK_DIR/design.md" ]; then
-    if grep -q "採用する方針と、その理由。" "$TASK_DIR/design.md" 2>/dev/null; then
-        DESIGN_NOTE=" | design: TEMPLATE"
-    fi
+if [ -f "$TASK_DIR/design.md" ] || [ -f "$TASK_DIR/design-final.md" ]; then
+    FILE_COUNT=$((FILE_COUNT + 1))
+else
+    MISSING="$MISSING design.md"
 fi
+
+# design テンプレート残存検出 (rename 前後どちらでも検出)
+DESIGN_NOTE=""
+for design_file in "$TASK_DIR/design.md" "$TASK_DIR/design-final.md"; do
+    if [ -f "$design_file" ] && grep -q "採用する方針と、その理由。" "$design_file" 2>/dev/null; then
+        DESIGN_NOTE=" | design: TEMPLATE"
+        break
+    fi
+done
 
 MISSING_NOTE=""
 if [ -n "$MISSING" ]; then

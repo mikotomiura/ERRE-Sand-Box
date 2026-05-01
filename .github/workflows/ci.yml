@@ -63,5 +63,53 @@ jobs:
           python-version-file: .python-version
       - name: Sync dependencies
         run: uv sync --frozen --all-groups
-      - name: pytest -m "not godot"
-        run: uv run pytest -m "not godot"
+      - name: pytest -m "not godot and not eval"
+        # ``eval``-marked tests need the [eval] extras (heavy ML deps:
+        # sentence-transformers, transformers, empath). The default
+        # CI install (``--all-groups``) only pulls dependency-groups,
+        # so deselect ``eval``-marked tests here; m9-eval-system Tier
+        # A unit tests stay on the default selection because they
+        # inject stub callables and have no real-model imports.
+        run: uv run pytest -m "not godot and not eval"
+
+  eval-egress-grep-gate:
+    # m9-eval-system Phase P0b — defence-in-depth (layer 4 of the
+    # 4-layer DuckDB schema-guard contract). The behavioural sentinel
+    # test in tests/test_evidence/test_eval_paths_contract.py is the
+    # primary boundary; this grep is a static back-stop that catches
+    # the obvious ``metrics.`` shape inside the documented training-
+    # egress allow-list. See
+    # .steering/20260430-m9-eval-system/design-final.md
+    # §"DuckDB 単 file + named schema + 4 層 contract".
+    name: eval egress grep gate (no `metrics.` in training paths)
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+      - name: Forbid `metrics.` in training-egress modules
+        # Allow-list of paths that read raw_dialog for the LoRA
+        # training pipeline. New training egress paths MUST be added
+        # here AND covered by the sentinel CI test.
+        run: |
+          set -euo pipefail
+          paths=(
+            src/erre_sandbox/cli/export_log.py
+            src/erre_sandbox/evidence/eval_store.py
+          )
+          missing=()
+          for p in "${paths[@]}"; do
+            if [ ! -f "$p" ]; then missing+=("$p"); fi
+          done
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::training-egress allow-list points at missing path(s): ${missing[*]}"
+            exit 1
+          fi
+          # Look for any reference to the metrics schema. The
+          # ``METRICS_SCHEMA`` constant import is permitted (it's how
+          # eval_store guards the boundary), but a literal ``metrics.``
+          # qualifier inside a training-egress module is not.
+          if grep -nE '"metrics\.|'\''metrics\.' "${paths[@]}"; then
+            echo "::error::training-egress module references the metrics schema literally — that is a contract violation (see contracts/eval_paths.py)"
+            exit 1
+          fi
+          echo "[eval-egress-grep-gate] PASS"

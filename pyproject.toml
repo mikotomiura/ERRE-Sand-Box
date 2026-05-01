@@ -33,11 +33,29 @@ dependencies = [
     "sqlite-vec>=0.1,<1",
     "pyyaml>=6,<7",
     "numpy>=2,<3",
+    # Evaluation data layer (m9-eval-system Phase 0). DuckDB is the single
+    # store for Tier 0 ``raw_dialog`` + ``metrics`` schemas; Parquet export
+    # is a downstream artefact. Kept in core (not eval extras) so the
+    # ``contracts.eval_paths`` schema-guard contract is always exercised by
+    # CI; heavy ML deps (sentence-transformers, scipy, ollama, empath, arch)
+    # remain isolated under ``optional-dependencies.eval``.
+    "duckdb>=1.1,<2",
 ]
 
 [project.optional-dependencies]
 ui = [
     "streamlit>=1.39,<2",
+]
+# m9-eval-system Tier A/B/C heavy ML deps (Codex MEDIUM-4: keep core
+# dependencies lightweight, isolate eval-only stack behind an extras
+# group). Install with ``uv sync --extra eval`` on the Mac when running
+# tier-a real-model tests; CI default keeps the resolution slim.
+eval = [
+    "scipy>=1.13,<2",                # bootstrap resample / stats helpers (P5)
+    "sentence-transformers>=3,<4",   # MPNet (novelty) + transformers pipeline (NLI)
+    "ollama>=0.3,<1",                # Tier C judge LLM HTTP client
+    "empath>=0.89",                  # Tier A secondary diagnostic (Big5 claim 不使用)
+    "arch>=7,<8",                    # 時系列 bootstrap helpers (HIGH-2)
 ]
 
 [project.scripts]
@@ -148,6 +166,15 @@ check_untyped_defs = true
 module = ["sqlite_vec.*", "streamlit.*"]
 ignore_missing_imports = true
 
+# m9-eval-system Tier A heavy ML deps live behind ``[eval]`` extras and
+# are imported lazily inside ``compute_*`` default loaders. ``--all-groups``
+# in CI does NOT install ``optional-dependencies.eval``, so mypy cannot
+# resolve them — mark the modules as ``ignore_missing_imports`` so the
+# strict src check stays green without forcing the heavy install.
+[[tool.mypy.overrides]]
+module = ["transformers.*", "sentence_transformers.*", "empath.*", "ollama.*", "arch.*", "scipy.*"]
+ignore_missing_imports = true
+
 [tool.pydantic-mypy]
 init_forbid_extra = true
 init_typed = true
@@ -179,4 +206,5 @@ filterwarnings = [
 ]
 markers = [
     "godot: requires Godot binary on PATH or GODOT_BIN; deselected on CI via -m \"not godot\"",
+    "eval: requires the [eval] extras (sentence-transformers / transformers / empath); deselected by default",
 ]
